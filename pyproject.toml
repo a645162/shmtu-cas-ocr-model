@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cas-ocr-model"
+version = "2.0.0"
+description = "SHMTU CAS 验证码识别模型训练与推理"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Haomin Kong" },
+]
+
+dependencies = [
+    "opencv-python>=4.5.0",
+    "numpy",
+    "scikit-learn",
+    "pillow",
+    "torch>=2.0.0",
+    "torchvision",
+    "tqdm",
+    "selenium>=4.0.0",
+    "webdriver-manager",
+    "matplotlib",
+    "jupyter",
+    "notebook",
+    "openvino-dev",
+    "onnx",
+    "onnxruntime",
+    "onnxconverter-common",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cas_ocr_model*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"cas_ocr_model.v1.classify.digit" = ["test/*.png"]
+"cas_ocr_model.v1.classify.equal_symbol" = ["test/*.png"]
+"cas_ocr_model.v1.classify.operator" = ["test/*.png"]
+"cas_ocr_model.v1.classify.predict" = ["test/*.png"]
