@@ -22,7 +22,11 @@ def worker_main(
     output_dir_str: str,
     progress_q: Any,
 ) -> dict[str, int]:
-    """spawn 进程入口. 返回 {"saved","rejected","errors"}."""
+    """spawn 进程入口. 返回 {"saved","rejected","errors"}.
+
+    所有 print 都改为 put 到 progress_q (与 collect_one 共享), 由主进程统一渲染,
+    避免与 rich 进度条抢行. progress_q 为 None 时降级到 print.
+    """
     output_dir = Path(output_dir_str)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -30,8 +34,17 @@ def worker_main(
     backend.warmup()
     sem = asyncio.Semaphore(args.per_process)
 
+    def _log(level: str, msg: str) -> None:
+        prefix = f"[pid={os.getpid()} w={worker_id} b={backend.name}] {msg}"
+        if progress_q is None:
+            print(prefix, flush=True)
+            return
+        try:
+            progress_q.put_nowait({"level": level, "msg": prefix, "ts": time.time()})
+        except Exception:  # noqa: BLE001
+            pass
+
     saved = rejected = errors = 0
-    log_prefix = f"[pid={os.getpid()} w={worker_id} b={backend.name}]"
 
     async def loop() -> None:
         nonlocal saved, rejected, errors
@@ -41,27 +54,13 @@ def worker_main(
                 if counter.value >= args.count:
                     return
                 async with sem:
-                    status = await collect_one(backend, auth, counter, output_dir, log_prefix)
+                    status = await collect_one(backend, auth, counter, output_dir, "", progress_q)
                 if status == "saved":
                     saved += 1
                 elif status == "rejected":
                     rejected += 1
                 else:
                     errors += 1
-                try:
-                    progress_q.put_nowait(
-                        {
-                            "ts": time.time(),
-                            "worker": worker_id,
-                            "status": status,
-                            "saved": saved,
-                            "rejected": rejected,
-                            "errors": errors,
-                            "counter": counter.value,
-                        }
-                    )
-                except Exception:  # noqa: BLE001
-                    pass
                 if args.throttle > 0:
                     await asyncio.sleep(args.throttle)
                 if (saved + rejected + errors) % 200 == 0:
@@ -75,5 +74,5 @@ def worker_main(
     except KeyboardInterrupt:
         pass
     except Exception as e:  # noqa: BLE001
-        print(f"{log_prefix} fatal: {e}\n{traceback.format_exc()}", flush=True)
+        _log("error", f"fatal: {e}\n{traceback.format_exc()}")
     return {"saved": saved, "rejected": rejected, "errors": errors}

@@ -128,12 +128,20 @@ def spawn_workers(args: argparse.Namespace) -> None:
                             crashed_count += 1
                     if crashed:
                         break
-                    # 排空 progress 队列 (子进程向主进程报告, 当前未用, 排空防内存涨)
+                    # 排空 progress 队列 (子进程向主进程回传的日志/统计)
+                    # 真正消费: 用 rich.log() 渲染 (自动绕开进度条不重绘区)
                     while not progress_q.empty():
                         try:
-                            progress_q.get_nowait()
+                            msg = progress_q.get_nowait()
                         except Exception:
                             break
+                        if progress_ctx is not None and isinstance(msg, dict) and "level" in msg:
+                            # 子进程日志: {"level": "info"|"error", "msg": "...", "ts": ...}
+                            level = msg.get("level", "info")
+                            text = msg.get("msg", "")
+                            style = "red" if level == "error" else "cyan" if level == "warn" else "white"
+                            progress_ctx.log(text, style=style)
+                        # 旧格式 dict (status/saved/rejected/errors) 静默丢弃
                     now = time.time()
                     # ETA / 速率: 本次新采 / 已用时间; 至少 2 张样本 + 1s 才计算
                     new_this_run = counter.value - start_idx

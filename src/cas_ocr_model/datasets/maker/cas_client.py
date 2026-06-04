@@ -24,12 +24,25 @@ async def collect_one(
     counter: Any,
     output_dir: Path,
     log_prefix: str,
+    log_q: Any = None,
 ) -> Literal["saved", "rejected", "error"]:
-    """单次采集闭环."""
+    """单次采集闭环.
+
+    日志不再直接 print (会与主进程 rich 进度条抢行), 改放 log_q 队列,
+    由主进程统一渲染. log_q 为 None 时静默 (兼容旧调用).
+    """
+    def _log(level: str, msg: str) -> None:
+        if log_q is None:
+            return
+        try:
+            log_q.put_nowait({"level": level, "msg": f"{log_prefix} {msg}", "ts": time.time()})
+        except Exception:  # noqa: BLE001
+            pass
+
     try:
         probe = await auth.probe_login()
     except Exception as e:  # noqa: BLE001
-        print(f"{log_prefix} probe failed: {e}", flush=True)
+        _log("error", f"probe failed: {e}")
         return "error"
     if not probe.is_need_login:
         await auth.aclose()
@@ -38,13 +51,13 @@ async def collect_one(
     try:
         challenge = await auth.prepare_challenge()
     except Exception as e:  # noqa: BLE001
-        print(f"{log_prefix} prepare_challenge failed: {e}", flush=True)
+        _log("error", f"prepare_challenge failed: {e}")
         return "error"
 
     try:
         hit = await backend.recognize(challenge.captcha_image)
     except Exception as e:  # noqa: BLE001
-        print(f"{log_prefix} ocr failed: {e}", flush=True)
+        _log("error", f"ocr failed: {e}")
         return "error"
 
     if not hit.answer:
@@ -56,7 +69,7 @@ async def collect_one(
             student_no, password, hit.answer, challenge.execution
         )
     except Exception as e:  # noqa: BLE001
-        print(f"{log_prefix} submit failed: {e}", flush=True)
+        _log("error", f"submit failed: {e}")
         return "error"
 
     if not (result.is_password_error or result.is_success):
@@ -93,9 +106,9 @@ async def collect_one(
         tmp_json_path = Path(tmp_json.name)
     tmp_json_path.replace(json_path)
 
-    print(
-        f"{log_prefix} saved #{stem}: expr='{hit.expression}' answer={hit.answer} "
+    _log(
+        "info",
+        f"saved #{stem}: expr='{hit.expression}' answer={hit.answer} "
         f"verify={result.variant}",
-        flush=True,
     )
     return "saved"
