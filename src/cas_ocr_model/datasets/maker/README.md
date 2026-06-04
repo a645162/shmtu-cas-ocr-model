@@ -46,7 +46,32 @@ python -m cas_ocr_model.datasets.maker \
 
 ## 断点续采
 
-启动时扫描 `--output` 已有 8 位 jpg, 从 max+1 继续; 满足 `--count` 自动停止。
+## 断点续采
+
+启动时扫描 `--output` 已有 8 位 jpg, 从 `max+1` 继续; 满足 `--count` 自动停止.
+
+**默认行为就是续采** (不会覆盖已有数据), 适用于"上次跑到一半断电/退出/被杀, 这次接着来"的场景:
+
+| 上次已有 | 这次 `--count` | 实际范围 | 不会覆盖的 |
+|---|---|---|---|
+| 0 张   | 5000 | 0~4999      | — (空目录) |
+| 70 张  | 5000 | 70~5069     | 0~69       |
+| 4999 张| 1    | 4999~4999   | 0~4998     |
+
+**`--resume` 是显式开关**: 行为完全一致, 仅在日志里多打 `mode=explicit-resume` 标记, 便于审计
+(cron / shell 脚本里可以明确表达"这是续采, 不是覆盖"):
+
+```bash
+# 默认 (隐式续采)
+python -m cas_ocr_model.datasets.maker --output ./dataset --count 5000
+
+# 显式续采 (日志有 explicit-resume 标记, 行为一致)
+python -m cas_ocr_model.datasets.maker --output ./dataset --count 5000 --resume
+```
+
+**注意**: 当前实现只续采不覆盖, 没有"清空重来"的开关. 想要从 0 开始请手动 `rm dataset/*.jpg dataset/*.json`.
+
+实现细节见 `config.scan_existing_max_index` (工具函数) 和 `pool.spawn_workers` (调度入口).
 
 ## 后续步骤
 

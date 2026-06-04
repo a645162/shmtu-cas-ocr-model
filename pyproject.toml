@@ -41,3 +41,12 @@ exclude = ["tests*"]
 "cas_ocr_model.v1.tasks.digit" = ["test_images/*.png", "sample_captures/*.png"]
 "cas_ocr_model.v1.tasks.equal_symbol" = ["test_images/*.png"]
 "cas_ocr_model.v1.tasks.operator" = ["test_images/*.png"]
+
+# pytest: 注入两个 src 根, 让测试可直接 import cas_ocr_model 和 shmtu_cas
+# (替代在每个 tests/conftest.py 里手动 sys.path.insert)
+# relative 路径基于 pyproject.toml 所在目录
+[tool.pytest.ini_options]
+pythonpath = [
+    "src",
+    "../Lib/shmtu-cas-python/src",
+]

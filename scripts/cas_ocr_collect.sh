@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/env.sh"
-COUNT="${COUNT:-5000}"
+COUNT="${COUNT:-500000}"
 PROCESSES="${PROCESSES:-4}"
 PER_PROCESS="${PER_PROCESS:-8}"
 echo "[collect] backend=$SHMTU_BACKEND output=$SHMTU_DATASET_ROOT count=$COUNT procs=$PROCESSES x$PER_PROCESS"
