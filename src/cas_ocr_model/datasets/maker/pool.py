@@ -17,7 +17,7 @@ from multiprocessing import Manager, get_context
 from pathlib import Path
 from typing import Any
 
-from .config import scan_existing_max_index
+from .config import format_eta, scan_existing_max_index
 from .worker import worker_main
 
 
@@ -37,11 +37,15 @@ def spawn_workers(args: argparse.Namespace) -> None:
     progress_q: Any = mgr.Queue()
 
     mode_tag = "explicit-resume" if args.resume else "default-resume"
+    # 进度条语义: 断点续采时, 编号从 start_idx 增长到 start_idx + count
+    # bar.n / bar.total 都用全局编号, 用户能直观看到"已写到 N / M (含已有)"
+    final_total = start_idx + args.count
     print(
         f"[main] mode={mode_tag} start_index={start_idx} "
         f"(existing={existing_max + 1} files scanned) output={output_dir} "
         f"backend={args.backend} processes={args.processes} "
-        f"per_process={args.per_process} target={args.count}",
+        f"per_process={args.per_process} target={args.count} "
+        f"final_total={final_total}",
         flush=True,
     )
 
@@ -49,11 +53,11 @@ def spawn_workers(args: argparse.Namespace) -> None:
     try:
         from tqdm import tqdm
         bar = tqdm(
-            total=args.count,
-            initial=counter.value,
+            total=final_total,           # 终态: start_idx + count (全局编号)
+            initial=start_idx,           # 起点: 已有 N 张, 进度条从 N 开始显示
             desc="collect",
             unit="img",
-            ncols=80,
+            ncols=100,
             file=sys.stderr,
             dynamic_ncols=True,
             mininterval=0.5,
@@ -65,6 +69,8 @@ def spawn_workers(args: argparse.Namespace) -> None:
         last_report = time.time()
         last_saved = counter.value
 
+    # 启动时刻 (用 monotonic 不受系统时钟跳变影响)
+    boot_time = time.monotonic()
     crashed_count = 0
 
     with ctx.Pool(processes=args.processes) as pool:
@@ -77,7 +83,7 @@ def spawn_workers(args: argparse.Namespace) -> None:
 
         try:
             while True:
-                if counter.value >= args.count:
+                if counter.value >= final_total:
                     break
                 crashed = False
                 for i, ar in enumerate(async_results):
@@ -97,20 +103,40 @@ def spawn_workers(args: argparse.Namespace) -> None:
                     except Exception:
                         break
                 now = time.time()
+                # ETA: 速率 = 本次新采 / 已用时间; 至少 2 张样本 + 1s 才计算, 避免除零和首帧噪声
+                new_this_run = counter.value - start_idx
+                elapsed = max(1e-6, time.monotonic() - boot_time)
+                if new_this_run >= 2 and elapsed >= 1.0:
+                    rate = new_this_run / elapsed
+                    remain = max(0, args.count - new_this_run)
+                    eta_sec = remain / rate if rate > 0 else -1.0
+                else:
+                    rate = 0.0
+                    eta_sec = -1.0
+                eta_str = format_eta(eta_sec)
+
                 if bar is not None:
                     # tqdm: 增量更新到当前计数
                     delta = counter.value - bar.n
                     if delta > 0:
                         bar.update(delta)
-                    bar.set_postfix_str(f"target={args.count}", refresh=False)
+                    bar.set_postfix_str(
+                        f"new={new_this_run}/{args.count} "
+                        f"rate={rate:.1f}/s "
+                        f"eta={eta_str} "
+                        f"resume={'on' if args.resume else 'off'}",
+                        refresh=False,
+                    )
                 else:
                     # 兜底: 定时打印
                     if now - last_report >= args.report_interval:
                         current = counter.value
-                        rate = (current - last_saved) / max(1e-6, (now - last_report))
+                        period_rate = (current - last_saved) / max(1e-6, (now - last_report))
                         print(
-                            f"[main] progress={current}/{args.count} "
-                            f"({100*current/args.count:.1f}%) rate={rate:.1f}/s",
+                            f"[main] progress={current}/{final_total} "
+                            f"(this_run={new_this_run}/{args.count}, "
+                            f"{100*new_this_run/args.count:.1f}%) "
+                            f"rate={period_rate:.1f}/s eta={eta_str}",
                             flush=True,
                         )
                         last_report = now
@@ -129,11 +155,16 @@ def spawn_workers(args: argparse.Namespace) -> None:
             pool.close()
             pool.join()
 
+    elapsed_total = time.monotonic() - boot_time
     suffix = ""
     if crashed_count:
         suffix = f" crashed_workers={crashed_count}"
+    new_total = counter.value - start_idx
+    avg_rate = new_total / max(1e-6, elapsed_total)
     print(
-        f"[main] done. saved={counter.value} target={args.count} "
-        f"output={output_dir}{suffix}",
+        f"[main] done. written={counter.value}/{final_total} "
+        f"(this_run={new_total}/{args.count}) "
+        f"elapsed={elapsed_total:.1f}s avg_rate={avg_rate:.1f}/s "
+        f"mode={mode_tag} output={output_dir}{suffix}",
         flush=True,
     )

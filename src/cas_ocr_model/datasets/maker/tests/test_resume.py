@@ -14,6 +14,7 @@ import pytest
 
 from cas_ocr_model.datasets.maker.config import (
     build_arg_parser,
+    format_eta,
     scan_existing_max_index,
 )
 from cas_ocr_model.datasets.maker import scan_existing_max_index as maker_export
@@ -113,6 +114,78 @@ def test_resume_preserves_existing_data(tmp_path):
         "00000003.jpg",
         "00000004.jpg",
     }
+
+
+def test_format_eta_negative_returns_question_mark():
+    # 负数 / NaN 防御: 速率 <= 0 时调用方会传 -1
+    assert format_eta(-1) == "?"
+    assert format_eta(-0.5) == "?"
+
+
+def test_format_eta_nan_returns_question_mark():
+    assert format_eta(float("nan")) == "?"
+
+
+def test_format_eta_zero_seconds():
+    assert format_eta(0) == "0s"
+
+
+def test_format_eta_subminute():
+    assert format_eta(0.4) == "0s"   # 向下取整
+    assert format_eta(1) == "1s"
+    assert format_eta(42) == "42s"
+    assert format_eta(59.9) == "59s"
+
+
+def test_format_eta_under_one_hour_uses_minutes():
+    assert format_eta(60) == "1m"
+    assert format_eta(719) == "11m"
+    assert format_eta(3599) == "59m"
+
+
+def test_format_eta_exact_one_hour():
+    assert format_eta(3600) == "1h"
+
+
+def test_format_eta_promotes_to_hours_no_minutes():
+    """超过 60 分钟必须升级为小时, 不显示 'XhYm'."""
+    assert format_eta(5400) == "1h"     # 1.5h -> 1h (不要 1h30m)
+    assert format_eta(3660) == "1h"     # 1h1m -> 1h
+    assert format_eta(7200) == "2h"     # 2h
+    assert format_eta(82800) == "23h"   # 23h (24h 边界前)
+    # 不应再出现 "1h30m" / "23h59m" 这种并列
+    assert "h" in format_eta(5400) and "m" not in format_eta(5400)
+
+
+def test_format_eta_avoids_thousand_minutes_and_long_hours():
+    """核心需求: 大数用合适单位, 不能 '1000m' / '116h' / '168h' 这种难读."""
+    # 1000 分钟 = 60000s = 16h40m -> 升级为 16h (不要 16h40m)
+    assert format_eta(60000) == "16h"
+    # 5000 分钟 = 300000s = 3.47d -> 升级为 3d (不要 83h20m)
+    assert format_eta(300000) == "3d"
+    # 用户原报错 116h4m = 417840s = 4.83d -> 升级为 4d (不要 116h4m)
+    assert format_eta(116 * 3600 + 4 * 60) == "4d"
+    # 整 24h -> 1d
+    assert format_eta(86400) == "1d"
+
+
+def test_format_eta_promotes_to_days_over_24h():
+    """超过 24 小时必须升级为天, 不显示 '1dXh' / '7dYh'."""
+    assert format_eta(86400) == "1d"             # 24h -> 1d
+    assert format_eta(86400 + 3600) == "1d"      # 25h -> 1d (不显示 1h)
+    assert format_eta(7 * 24 * 3600) == "7d"     # 7 天
+    assert format_eta(30 * 24 * 3600) == "30d"   # 30 天
+    # 1 年级: 365d
+    assert format_eta(365 * 24 * 3600) == "365d"
+
+
+def test_format_eta_extreme_value():
+    # 7 天 -> 7d (不是 168h, 因为 >= 24h 升级为天)
+    assert format_eta(7 * 24 * 3600) == "7d"
+    # 30 天 -> 30d
+    assert format_eta(30 * 24 * 3600) == "30d"
+    # 1 年 -> 365d
+    assert format_eta(365 * 24 * 3600) == "365d"
 
 
 if __name__ == "__main__":

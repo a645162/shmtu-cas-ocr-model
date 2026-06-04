@@ -74,6 +74,48 @@ def ensure_pytorch_weights(weights_dir: Path) -> dict[str, Path]:
     return paths
 
 
+def format_eta(seconds: float) -> str:
+    """把秒数格式化成自适应单位, 避免 "1000m" / "116h4m" 这种难读数字.
+
+    进位规则 (按数值从大到小归整, 永不并列显示两个单位):
+        < 0  或 NaN    -> "?" (未知, 速率 <= 0 时调用方传入)
+        < 60s          -> "42s"
+        < 60m (1h)     -> "11m"       整分钟, 不显示秒
+        < 24h          -> "1h" / "5h" / "23h"  整小时, 超过 60 分钟不显示 "XhYm"
+        >= 24h         -> "1d" / "7d" / "30d"  整天数, 不再嵌套小时
+
+    例子:
+        >>> format_eta(0)
+        '0s'
+        >>> format_eta(42)
+        '42s'
+        >>> format_eta(60)
+        '1m'
+        >>> format_eta(3599)
+        '59m'
+        >>> format_eta(3600)
+        '1h'
+        >>> format_eta(5400)         # 1.5h -> 升级为小时, 不显示 30m
+        '1h'
+        >>> format_eta(7200)         # 2h
+        '2h'
+        >>> format_eta(86400)        # 1 天
+        '1d'
+        >>> format_eta(7 * 24 * 3600)
+        '7d'
+    """
+    if seconds < 0 or seconds != seconds:  # NaN 防御
+        return "?"
+    s = int(seconds)
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:               # < 1h: 用分钟
+        return f"{s // 60}m"
+    if s < 86400:              # < 24h: 用小时, 不显示分钟
+        return f"{s // 3600}h"
+    return f"{s // 86400}d"    # >= 24h: 用天, 不显示小时/分钟
+
+
 def scan_existing_max_index(output_dir: Path) -> int:
     """扫描已有 8 位编号 jpg, 返回最大编号; 无则返回 -1.
 
