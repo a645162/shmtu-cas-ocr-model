@@ -1,12 +1,17 @@
 """多进程 Pool 调度 + 进度监控.
 
-主进程用 tqdm 进度条 (stderr) 显示进度, 子进程的 print (flush=True)
+主进程用 rich.progress 进度条 (stderr) 显示进度, 子进程的 print (flush=True)
 走 stdout 不会冲突 (终端是行式设备, 两路流并行不互相覆盖).
 
 断点续采 (默认行为):
     启动时扫描 --output 已有 8 位 jpg, 从 max+1 继续, 达到 --count 自动停止.
     --resume 是显式开关, 行为完全一致, 仅在日志里多打 "explicit resume" 标记,
     便于审计 (例如在 cron / shell 脚本里明确表达"这是续采,不是覆盖").
+
+进度条组件 (rich):
+    SpinnerColumn | 任务描述 | BarColumn | 计数 (m/n) | 百分比 | ETA (TimeRemainingColumn) | 自定义 fields (new/rate/resume)
+    ETA 自动用 s / m / h / d 进位 (rich 内置 TimeRemainingColumn), 不再依赖 format_eta.
+    没有 rich 时退化到 [main] progress 定时打印兜底日志.
 """
 from __future__ import annotations
 
@@ -38,7 +43,6 @@ def spawn_workers(args: argparse.Namespace) -> None:
 
     mode_tag = "explicit-resume" if args.resume else "default-resume"
     # 进度条语义: 断点续采时, 编号从 start_idx 增长到 start_idx + count
-    # bar.n / bar.total 都用全局编号, 用户能直观看到"已写到 N / M (含已有)"
     final_total = start_idx + args.count
     print(
         f"[main] mode={mode_tag} start_index={start_idx} "
@@ -49,23 +53,41 @@ def spawn_workers(args: argparse.Namespace) -> None:
         flush=True,
     )
 
-    # tqdm 走 stderr, 跟子进程 stdout 的 saved/error 日志互不干扰
+    # rich 进度条 (pip 风格): Spinner + Bar + 计数 + 百分比 + ETA (s/m/h/d) + 自定义字段
+    # rich 没装时退回到 [main] progress 定时打印
+    progress_ctx: Any = None
+    task_id: Any = None
     try:
-        from tqdm import tqdm
-        bar = tqdm(
-            total=final_total,           # 终态: start_idx + count (全局编号)
-            initial=start_idx,           # 起点: 已有 N 张, 进度条从 N 开始显示
-            desc="collect",
-            unit="img",
-            ncols=100,
-            file=sys.stderr,
-            dynamic_ncols=True,
-            mininterval=0.5,
-            disable=not sys.stderr.isatty(),  # 非 tty (重定向到 log) 时关闭
+        from rich.progress import (
+            BarColumn,
+            MofNCompleteColumn,
+            Progress,
+            SpinnerColumn,
+            TaskProgressColumn,
+            TextColumn,
+            TimeRemainingColumn,
+        )
+        from rich.console import Console
+
+        # 非 tty 时禁用 rich (重定向到 log 文件会污染输出)
+        console = Console(file=sys.stderr, force_terminal=sys.stderr.isatty(), soft_wrap=True)
+        progress_ctx = Progress(
+            SpinnerColumn(),
+            TextColumn("[bold cyan]collect[/bold cyan]"),
+            BarColumn(bar_width=30),
+            MofNCompleteColumn(),  # "N / M"
+            TaskProgressColumn(),  # " 45%"
+            TextColumn("eta"),
+            TimeRemainingColumn(),  # rich 自带, 自动 s/m/h/d 进位
+            TextColumn("{task.fields[info]}"),
+            console=console,
+            disable=not sys.stderr.isatty(),
+            transient=False,
+            redirect_stdout=False,
+            redirect_stderr=False,
         )
     except ImportError:
-        # 没有 tqdm 时的兜底: 仍走原来的 [main] progress 报告
-        bar = None
+        progress_ctx = None
         last_report = time.time()
         last_saved = counter.value
 
@@ -73,87 +95,99 @@ def spawn_workers(args: argparse.Namespace) -> None:
     boot_time = time.monotonic()
     crashed_count = 0
 
-    with ctx.Pool(processes=args.processes) as pool:
-        async_results = [
-            pool.apply_async(
-                worker_main, (i, args, counter, str(output_dir), progress_q),
-            )
-            for i in range(args.processes)
-        ]
+    if progress_ctx is not None:
+        progress_ctx.__enter__()
+        task_id = progress_ctx.add_task(
+            "collect",
+            total=final_total,
+            completed=start_idx,
+            info="",
+        )
 
-        try:
-            while True:
-                if counter.value >= final_total:
-                    break
-                crashed = False
-                for i, ar in enumerate(async_results):
-                    if ar.ready() and not ar.successful():
-                        try:
-                            ar.get()
-                        except Exception as e:  # noqa: BLE001
-                            print(f"[main] worker {i} crashed: {e}", flush=True)
-                        crashed = True
-                        crashed_count += 1
-                if crashed:
-                    break
-                # 排空 progress 队列 (子进程向主进程报告, 当前未用, 排空防内存涨)
-                while not progress_q.empty():
-                    try:
-                        progress_q.get_nowait()
-                    except Exception:
+    try:
+        with ctx.Pool(processes=args.processes) as pool:
+            async_results = [
+                pool.apply_async(
+                    worker_main, (i, args, counter, str(output_dir), progress_q),
+                )
+                for i in range(args.processes)
+            ]
+
+            try:
+                while True:
+                    if counter.value >= final_total:
                         break
-                now = time.time()
-                # ETA: 速率 = 本次新采 / 已用时间; 至少 2 张样本 + 1s 才计算, 避免除零和首帧噪声
-                new_this_run = counter.value - start_idx
-                elapsed = max(1e-6, time.monotonic() - boot_time)
-                if new_this_run >= 2 and elapsed >= 1.0:
-                    rate = new_this_run / elapsed
-                    remain = max(0, args.count - new_this_run)
-                    eta_sec = remain / rate if rate > 0 else -1.0
-                else:
-                    rate = 0.0
-                    eta_sec = -1.0
-                eta_str = format_eta(eta_sec)
-
-                if bar is not None:
-                    # tqdm: 增量更新到当前计数
-                    delta = counter.value - bar.n
-                    if delta > 0:
-                        bar.update(delta)
-                    bar.set_postfix_str(
+                    crashed = False
+                    for i, ar in enumerate(async_results):
+                        if ar.ready() and not ar.successful():
+                            try:
+                                ar.get()
+                            except Exception as e:  # noqa: BLE001
+                                print(f"[main] worker {i} crashed: {e}", flush=True)
+                            crashed = True
+                            crashed_count += 1
+                    if crashed:
+                        break
+                    # 排空 progress 队列 (子进程向主进程报告, 当前未用, 排空防内存涨)
+                    while not progress_q.empty():
+                        try:
+                            progress_q.get_nowait()
+                        except Exception:
+                            break
+                    now = time.time()
+                    # ETA / 速率: 本次新采 / 已用时间; 至少 2 张样本 + 1s 才计算
+                    new_this_run = counter.value - start_idx
+                    elapsed = max(1e-6, time.monotonic() - boot_time)
+                    if new_this_run >= 2 and elapsed >= 1.0:
+                        rate = new_this_run / elapsed
+                    else:
+                        rate = 0.0
+                    eta_str_value = format_eta(
+                        (max(0, args.count - new_this_run) / rate)
+                        if rate > 0
+                        else -1.0
+                    )
+                    info_str = (
                         f"new={new_this_run}/{args.count} "
                         f"rate={rate:.1f}/s "
-                        f"eta={eta_str} "
-                        f"resume={'on' if args.resume else 'off'}",
-                        refresh=False,
+                        f"manual_eta={eta_str_value} "
+                        f"resume={'on' if args.resume else 'off'}"
                     )
-                else:
-                    # 兜底: 定时打印
-                    if now - last_report >= args.report_interval:
-                        current = counter.value
-                        period_rate = (current - last_saved) / max(1e-6, (now - last_report))
-                        print(
-                            f"[main] progress={current}/{final_total} "
-                            f"(this_run={new_this_run}/{args.count}, "
-                            f"{100*new_this_run/args.count:.1f}%) "
-                            f"rate={period_rate:.1f}/s eta={eta_str}",
-                            flush=True,
+
+                    if progress_ctx is not None:
+                        progress_ctx.update(
+                            task_id,
+                            completed=counter.value,
+                            info=info_str,
+                            refresh=True,
                         )
-                        last_report = now
-                        last_saved = current
-                time.sleep(0.2)
-        except KeyboardInterrupt:
-            print("[main] KeyboardInterrupt -> terminating pool", flush=True)
-            pool.terminate()
-        finally:
-            if bar is not None:
-                # 收尾: 把进度对齐到真实计数, 关闭
-                delta = counter.value - bar.n
-                if delta > 0:
-                    bar.update(delta)
-                bar.close()
-            pool.close()
-            pool.join()
+                    else:
+                        # 兜底: 定时打印
+                        if now - last_report >= args.report_interval:
+                            current = counter.value
+                            period_rate = (current - last_saved) / max(1e-6, (now - last_report))
+                            print(
+                                f"[main] progress={current}/{final_total} "
+                                f"(this_run={new_this_run}/{args.count}, "
+                                f"{100*new_this_run/args.count:.1f}%) "
+                                f"rate={period_rate:.1f}/s eta={eta_str_value}",
+                                flush=True,
+                            )
+                            last_report = now
+                            last_saved = current
+                    time.sleep(0.2)
+            except KeyboardInterrupt:
+                print("[main] KeyboardInterrupt -> terminating pool", flush=True)
+                pool.terminate()
+            finally:
+                pool.close()
+                pool.join()
+    finally:
+        if progress_ctx is not None:
+            # 收尾: 把进度对齐到真实计数, 关闭
+            if task_id is not None:
+                progress_ctx.update(task_id, completed=counter.value, refresh=True)
+            progress_ctx.__exit__(None, None, None)
 
     elapsed_total = time.monotonic() - boot_time
     suffix = ""

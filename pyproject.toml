@@ -21,6 +21,7 @@ dependencies = [
     "torch>=2.0.0",
     "torchvision",
     "tqdm",
+    "rich>=13.0",
     "selenium>=4.0.0",
     "webdriver-manager",
     "matplotlib",
