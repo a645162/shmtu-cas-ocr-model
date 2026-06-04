@@ -1,0 +1,9 @@
+torch>=2.1
+torchvision>=0.16
+accelerate>=0.27
+numpy
+opencv-python>=4.5
+pyyaml
+# 可选: 训练监控
+# tensorboard
+# wandb

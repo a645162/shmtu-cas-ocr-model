@@ -215,3 +215,35 @@ fabric.properties
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
 
+
+# ============================================================
+# CAS OCR model (cas_ocr_model): 训练 / 采集产物, 不入库
+# ============================================================
+# 数据集 (datasets/dataset_collector.py / maker/ 默认输出)
+#   默认 ./dataset/ 或 ./datasets/<name>/, 用户用 --output 自定义
+# 训练 (trainer/train.py)
+#   默认 --output-dir ./runs/<exp>/, 内部 last.pt / best.pt / model.onnx
+# PyTorch 权重 (maker pytorch backend, 自动从 GitHub Release 缓存)
+#   默认 --weights-dir ./weights/
+
+# 数据集根目录
+/dataset/
+/datasets/
+
+# 训练输出
+/runs/
+/checkpoints/
+
+# 权重缓存
+/weights/
+
+# 模型权重 / ONNX / checkpoint 文件
+*.pt
+*.pth
+*.onnx
+*.ckpt
+
+# trainer 临时 / 调试产物
+*.log
+wandb/
+tensorboard/
