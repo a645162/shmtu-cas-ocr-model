@@ -3,12 +3,11 @@
 import os
 import tempfile
 
-# 本包 (cas_ocr_model.v1) 所在目录
-PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-# src/cas_ocr_model
-PKG_PARENT_DIR = os.path.dirname(PACKAGE_DIR)
-# src
-SRC_DIR = os.path.dirname(PKG_PARENT_DIR)
+# 本文件: .../src/cas_ocr_model/v1/configs/paths.py
+PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))   # .../v1/configs
+_V1_DIR = os.path.dirname(PACKAGE_DIR)                     # .../cas_ocr_model/v1
+PKG_PARENT_DIR = os.path.dirname(_V1_DIR)                  # .../cas_ocr_model
+SRC_DIR = os.path.dirname(PKG_PARENT_DIR)                  # .../src
 # 项目根目录
 prj_root_path = os.path.dirname(SRC_DIR)
 
