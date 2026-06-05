@@ -11,17 +11,14 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
+from cas_ocr_model.expression import parse_captcha_expression
 from .inference import CaptchaInferencer, InferenceResult
-
-_EXPR_RE = re.compile(r"^(\d)([+\-*/])(\d)=$")
-
 
 # ----------------------------------------------------------------------------
 # 结果汇总
@@ -51,18 +48,12 @@ class EvalMetrics:
 # ----------------------------------------------------------------------------
 
 
-def _parse_gt_expression(expr: str) -> Optional[tuple[int, str, int, int]]:
-    """从 expression "12+34=46" 解出 (d1, op, d2, answer). 失败返回 None."""
-    m = _EXPR_RE.match(expr)
-    if not m:
+def _parse_gt_expression(expr: str) -> Optional[tuple[int, str, int, Optional[int]]]:
+    """从 expression `1+2=` / `1加2等于3` 解出 (d1, op, d2, answer|None)."""
+    parsed = parse_captcha_expression(expr)
+    if parsed is None:
         return None
-    d1, op, d2 = int(m.group(1)), m.group(2), int(m.group(3))
-    rhs = expr[m.end():]
-    try:
-        ans = int(rhs)
-    except ValueError:
-        return None
-    return d1, op, d2, ans
+    return int(parsed.digit_left), parsed.operator, int(parsed.digit_right), parsed.answer
 
 
 def _safe_eval(d1: int, op: str, d2: int) -> Optional[int]:
@@ -128,7 +119,7 @@ def evaluate(
     if not paths:
         raise RuntimeError(f"no images found in {dataset_dir} matching {pattern}")
 
-    samples: list[tuple[Path, tuple[int, str, int, int]]] = []
+    samples: list[tuple[Path, tuple[int, str, int, Optional[int]]]] = []
     for jpg in paths:
         json_path = jpg.with_suffix(".json")
         if not json_path.is_file():
@@ -148,7 +139,7 @@ def evaluate(
     results: list[InferenceResult] = inferencer.predict_batch([p for p, _ in samples])
     assert len(results) == len(samples)
 
-    n_dl = n_op = n_dr = n_full = n_eval = 0
+    n_dl = n_op = n_dr = n_full = n_eval = n_answered = 0
     n = len(samples)
     confs: list[float] = []
     corrects: list[int] = []
@@ -182,7 +173,9 @@ def evaluate(
         n_full += int(ok_full)
 
         eval_v = _safe_eval(pred_dl, pred_op, pred_dr)
-        n_eval += int(eval_v is not None and eval_v == ans)
+        if ans is not None:
+            n_answered += 1
+            n_eval += int(eval_v is not None and eval_v == ans)
 
         if ok_dl:
             conf_dl[gt_dl_idx, gt_dl_idx] += 1
@@ -206,7 +199,7 @@ def evaluate(
         per_sample.append(
             {
                 "image": jpg.name,
-                "gt_expression": f"{d1}{op}{d2}={ans}",
+                "gt_expression": f"{d1}{op}{d2}" if ans is None else f"{d1}{op}{d2}={ans}",
                 "pred_expression": r.expression,
                 "ok_digit_left": ok_dl,
                 "ok_operator": ok_op,
@@ -227,7 +220,7 @@ def evaluate(
         acc_operator=n_op / n,
         acc_digit_right=n_dr / n,
         acc_expression=n_full / n,
-        acc_eval_result=n_eval / n,
+        acc_eval_result=(n_eval / n_answered) if n_answered else 0.0,
         mean_confidence=float(confs_arr.mean()) if confs_arr.size else 0.0,
         ece=_compute_ece(confs_arr, corrects_arr) if confs_arr.size else 0.0,
         confusion={

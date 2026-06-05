@@ -10,11 +10,9 @@ from typing import Optional
 import numpy as np
 import torch
 
-from cas_ocr_model.model import CaptchaTripleHeadCNN, load_checkpoint as _load_ckpt
+from cas_ocr_model.model import build_model_from_checkpoint
 from cas_ocr_model.trainer.config import (
     DIGIT_LABELS,
-    NUM_DIGIT_CLASSES,
-    NUM_OPERATOR_CLASSES,
     OPERATOR_LABELS,
 )
 
@@ -32,17 +30,10 @@ class PyTorchBackend:
         checkpoint: str | Path,
         backbone: str = "resnet18",
         device: str = "cpu",
-        num_digit_classes: int = NUM_DIGIT_CLASSES,
-        num_operator_classes: int = NUM_OPERATOR_CLASSES,
     ) -> None:
-        self.model = CaptchaTripleHeadCNN(
-            backbone=backbone,
-            pretrained=False,
-            num_digit_classes=num_digit_classes,
-            num_operator_classes=num_operator_classes,
-        )
+        del backbone
         self.device = torch.device(device)
-        _load_ckpt(self.model, str(checkpoint), device=self.device)
+        self.model = build_model_from_checkpoint(str(checkpoint), device=self.device)
         self.model.eval()
 
     @torch.no_grad()

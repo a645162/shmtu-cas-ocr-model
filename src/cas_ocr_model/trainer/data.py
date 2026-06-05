@@ -11,25 +11,20 @@ DDP 友好:
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-import cv2
-import numpy as np
 import torch
 from torch.utils.data import Dataset
 
 from cas_ocr_model.datasets.format import DatasetManifest, MANIFEST_FILENAME, scan_dataset
+from cas_ocr_model.expression import parse_captcha_expression
+from cas_ocr_model.preprocess_ops import decode_color_image, preprocess_captcha_to_tensor
 from .config import DIGIT2IDX, OP2IDX
 
 
 Split = Literal["train", "val", "test"]
-
-
-# 严格匹配 "数字 运算符 数字 = 答案" 这种表达式的左边三段
-_EXPR_RE = re.compile(r"^(\d)([+\-*/])(\d)=$")
 
 
 # ----------------------------------------------------------------------------
@@ -60,17 +55,16 @@ def _scan_samples_from_manifest(data_root: Path, split_files: list[str]) -> list
         except (OSError, json.JSONDecodeError):
             continue
         expr = str(meta.get("expression", ""))
-        m = _EXPR_RE.match(expr)
-        if not m:
+        parsed = parse_captcha_expression(expr)
+        if parsed is None:
             continue
-        d1, op, d2 = m.group(1), m.group(2), m.group(3)
         out.append(
             CaptchaSample(
                 image_path=jpg_path,
                 json_path=json_path,
-                digit_left=DIGIT2IDX[d1],
-                operator=OP2IDX[op],
-                digit_right=DIGIT2IDX[d2],
+                digit_left=DIGIT2IDX[parsed.digit_left],
+                operator=OP2IDX[parsed.operator],
+                digit_right=DIGIT2IDX[parsed.digit_right],
                 expression=expr,
             )
         )
@@ -112,6 +106,9 @@ class CaptchaPairDataset(Dataset):
         image_size_h: int = 64,
         image_size_w: int = 192,
         threshold: int = 200,
+        binarize_mode: str = "min_channel_otsu",
+        adaptive_block_size: int = 25,
+        adaptive_c: int = 15,
         split: Split | None = None,
         train: bool = True,            # legacy
         train_ratio: float = 0.9,      # legacy
@@ -152,13 +149,23 @@ class CaptchaPairDataset(Dataset):
 
         self.image_size = (image_size_h, image_size_w)
         self.threshold = threshold
+        self.binarize_mode = binarize_mode
+        self.adaptive_block_size = adaptive_block_size
+        self.adaptive_c = adaptive_c
 
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, dict[str, int]]:
         s = self.samples[idx]
-        img = _load_and_preprocess(s.image_path, self.image_size, self.threshold)
+        img = _load_and_preprocess(
+            s.image_path,
+            self.image_size,
+            self.threshold,
+            self.binarize_mode,
+            self.adaptive_block_size,
+            self.adaptive_c,
+        )
         labels = {
             "digit_left": s.digit_left,
             "operator": s.operator,
@@ -172,22 +179,23 @@ class CaptchaPairDataset(Dataset):
 # ----------------------------------------------------------------------------
 
 
-def _load_and_preprocess(path: Path, image_size: tuple[int, int], threshold: int) -> torch.Tensor:
-    """读图 -> 灰度 -> 二值化 -> resize -> 归一化 -> tensor.
-
-    返回 (1, H, W) float32 tensor, 值域 [0, 1].
-    """
-    arr = np.fromfile(str(path), dtype=np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    if img is None:
-        # 兜底: 用全黑图 (1, H, W)
-        return torch.zeros(1, image_size[0], image_size[1], dtype=torch.float32)
-
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, binary = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
-    resized = cv2.resize(binary, (image_size[1], image_size[0]), interpolation=cv2.INTER_AREA)
-    tensor = torch.from_numpy(resized).float().unsqueeze(0) / 255.0
-    return tensor
+def _load_and_preprocess(
+    path: Path,
+    image_size: tuple[int, int],
+    threshold: int,
+    binarize_mode: str,
+    adaptive_block_size: int,
+    adaptive_c: int,
+) -> torch.Tensor:
+    img = decode_color_image(path)
+    return preprocess_captcha_to_tensor(
+        img,
+        image_size=image_size,
+        threshold=threshold,
+        binarize_mode=binarize_mode,
+        adaptive_block_size=adaptive_block_size,
+        adaptive_c=adaptive_c,
+    )
 
 
 # ----------------------------------------------------------------------------

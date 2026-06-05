@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from cas_ocr_model.expression import CANONICAL_OPERATOR_LABELS
+from cas_ocr_model.preprocess_ops import BINARIZE_MODES
 
 # ----------------------------------------------------------------------------
 # 标签字典
@@ -24,7 +26,7 @@ DIGIT2IDX = {s: i for i, s in enumerate(DIGIT_LABELS)}
 # 运算符 4 类 (与数据集 expression 字符串保持一致; 不再分"符号/文字"独立 head)
 #   + 加   - 减   * 乘   / 除
 # 注: 如果数据集里出现 = 等号, 应在数据采集阶段过滤; 此处不处理.
-OPERATOR_LABELS: list[str] = ["+", "-", "*", "/"]
+OPERATOR_LABELS: list[str] = list(CANONICAL_OPERATOR_LABELS)
 OP2IDX = {s: i for i, s in enumerate(OPERATOR_LABELS)}
 
 NUM_DIGIT_CLASSES = len(DIGIT_LABELS)   # 10
@@ -52,6 +54,15 @@ class DataConfig:
     threshold: int = 200
     """二值化阈值. 与 v1/configs/defaults.thresh 对齐."""
 
+    binarize_mode: str = "min_channel_otsu"
+    """二值化模式. 随机颜色验证码推荐 min_channel_otsu."""
+
+    adaptive_block_size: int = 25
+    """adaptive 模式邻域窗口大小, 必须为奇数."""
+
+    adaptive_c: int = 15
+    """adaptive 模式阈值偏移."""
+
     train_ratio: float = 0.9
     """训练/验证划分 (按文件数, 顺序切片; 收集器生成时已随机)."""
 
@@ -74,6 +85,12 @@ class ModelConfig:
 
     dropout: float = 0.2
     """head 之前的 dropout 概率."""
+
+    slot_hidden_dim: int = 256
+    """宽度序列特征维度. 验证码位置固定, 这个中间维度决定 3 个槽位的表达能力."""
+
+    slot_attention_heads: int = 4
+    """3 个槽位查询宽度序列时的注意力头数."""
 
 
 @dataclass
@@ -128,6 +145,18 @@ class LossConfig:
     label_smoothing: float = 0.0
     """标签平滑, 0~0.1 之间. 验证码单字识别建议 0.05."""
 
+    focal_gamma: float = 0.0
+    """Focal gamma. 难样本较多时可设为 1~2, 默认关闭以保持稳定."""
+
+    weight_slot_order: float = 0.1
+    """槽位中心顺序约束权重: 左数字 < 运算符 < 右数字."""
+
+    weight_slot_overlap: float = 0.05
+    """槽位注意力去重权重, 减少三个头盯住同一段区域."""
+
+    slot_margin: float = 0.10
+    """槽位中心最小间距, 取值范围基于归一化宽度坐标 [0, 1]."""
+
 
 @dataclass
 class FullConfig:
@@ -155,6 +184,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--image-size-h", type=int, default=None)
     p.add_argument("--image-size-w", type=int, default=None)
     p.add_argument("--threshold", type=int, default=None)
+    p.add_argument("--binarize-mode", type=str, choices=list(BINARIZE_MODES), default=None)
+    p.add_argument("--adaptive-block-size", type=int, default=None)
+    p.add_argument("--adaptive-c", type=int, default=None)
     p.add_argument("--train-ratio", type=float, default=None)
     p.add_argument("--num-workers", type=int, default=None)
 
@@ -162,6 +194,8 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--backbone", type=str, default=None)
     p.add_argument("--pretrained", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
     p.add_argument("--dropout", type=float, default=None)
+    p.add_argument("--slot-hidden-dim", type=int, default=None)
+    p.add_argument("--slot-attention-heads", type=int, default=None)
 
     # train
     p.add_argument("--output-dir", type=str, default=None)
@@ -178,6 +212,10 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
     # loss
     p.add_argument("--label-smoothing", type=float, default=None)
+    p.add_argument("--focal-gamma", type=float, default=None)
+    p.add_argument("--weight-slot-order", type=float, default=None)
+    p.add_argument("--weight-slot-overlap", type=float, default=None)
+    p.add_argument("--slot-margin", type=float, default=None)
 
     return p.parse_args(argv)
 

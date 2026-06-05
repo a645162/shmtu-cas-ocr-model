@@ -21,11 +21,9 @@ from .config import (
     NUM_DIGIT_CLASSES,
     NUM_OPERATOR_CLASSES,
     load_from_yaml,
-    merge_args_to_config,
-    parse_args,
 )
 from .data import CaptchaPairDataset, collate_triple
-from .losses import TripleHeadLoss
+from .losses import LossWeights, TripleHeadLoss
 from .model import CaptchaTripleHeadCNN, load_checkpoint
 from .train import evaluate
 
@@ -55,6 +53,9 @@ def main() -> None:
         image_size_h=cfg.data.image_size_h,
         image_size_w=cfg.data.image_size_w,
         threshold=cfg.data.threshold,
+        binarize_mode=cfg.data.binarize_mode,
+        adaptive_block_size=cfg.data.adaptive_block_size,
+        adaptive_c=cfg.data.adaptive_c,
         train=False,
         train_ratio=cfg.data.train_ratio,
     )
@@ -71,13 +72,26 @@ def main() -> None:
         backbone=cfg.model.backbone,
         pretrained=False,  # 评估时不需要再拉 ImageNet
         dropout=cfg.model.dropout,
+        slot_hidden_dim=cfg.model.slot_hidden_dim,
+        slot_attention_heads=cfg.model.slot_attention_heads,
         num_digit_classes=NUM_DIGIT_CLASSES,
         num_operator_classes=NUM_OPERATOR_CLASSES,
     )
     load_checkpoint(model, args.checkpoint, device=accelerator.device)
     model = accelerator.prepare(model)
 
-    loss_fn = TripleHeadLoss(label_smoothing=0.0)
+    loss_fn = TripleHeadLoss(
+        weights=LossWeights(
+            digit_left=cfg.loss.weight_digit_left,
+            operator=cfg.loss.weight_operator,
+            digit_right=cfg.loss.weight_digit_right,
+            slot_order=cfg.loss.weight_slot_order,
+            slot_overlap=cfg.loss.weight_slot_overlap,
+        ),
+        label_smoothing=0.0,
+        focal_gamma=cfg.loss.focal_gamma,
+        slot_margin=cfg.loss.slot_margin,
+    )
     metrics = evaluate(accelerator, model, val_loader, loss_fn)
 
     accelerator.print(

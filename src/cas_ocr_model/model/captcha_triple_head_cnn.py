@@ -1,9 +1,9 @@
-"""当前简单实现: ResNet-18/34 backbone + 3-head.
+"""Captcha 主模型: ResNet 空间特征图 + 位置感知 3-head.
 
 设计原则:
     * 单 CNN 一次前向同时输出 digit_left / operator / digit_right
     * 不再像 v1 那样切 3 段送 3 个独立模型
-    * 运算符统一为 4 类 (+, -, *, /), 无等号头
+    * 保留宽度方向特征, 用 3 个槽位分别聚合左数字/运算符/右数字
 
 未来可扩展方向 (不破坏当前接口):
     * 替换 backbone 为 ConvNeXt / ViT
@@ -30,6 +30,8 @@ class CaptchaTripleHeadCNN(nn.Module):
         backbone: str = "resnet18",
         pretrained: bool = True,
         dropout: float = 0.2,
+        slot_hidden_dim: int = 256,
+        slot_attention_heads: int = 4,
         num_digit_classes: int = 10,
         num_operator_classes: int = 4,
     ) -> None:
@@ -43,16 +45,22 @@ class CaptchaTripleHeadCNN(nn.Module):
             feat_dim=feat_dim,
             num_digit_classes=num_digit_classes,
             num_operator_classes=num_operator_classes,
+            hidden_dim=slot_hidden_dim,
+            attention_heads=slot_attention_heads,
             dropout=dropout,
         )
 
-    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+    def forward(
+        self,
+        x: torch.Tensor,
+        return_aux: bool = False,
+    ) -> dict[str, torch.Tensor]:
         """x: (B, 1, H, W) 灰度图, 像素已归一到 [0, 1].
 
         返回 dict: {digit_left_logits, operator_logits, digit_right_logits}
         """
-        feat = self.backbone(x)
-        return self.heads(feat)
+        feat_map = self.backbone(x)
+        return self.heads(feat_map, return_aux=return_aux)
 
 
 # ----------------------------------------------------------------------------
@@ -104,3 +112,22 @@ def load_checkpoint(
     if device is not None:
         model.to(device)
     return model
+
+
+def build_model_from_checkpoint(
+    ckpt_path: str,
+    device: Optional[torch.device] = None,
+) -> CaptchaTripleHeadCNN:
+    """从 checkpoint 中恢复模型结构配置并加载权重."""
+    raw = torch.load(ckpt_path, map_location=device or "cpu")
+    cfg = raw.get("config", {}) if isinstance(raw, dict) else {}
+    model_cfg = cfg.get("model", {})
+
+    model = CaptchaTripleHeadCNN(
+        backbone=model_cfg.get("backbone", "resnet18"),
+        pretrained=False,
+        dropout=model_cfg.get("dropout", 0.2),
+        slot_hidden_dim=model_cfg.get("slot_hidden_dim", 256),
+        slot_attention_heads=model_cfg.get("slot_attention_heads", 4),
+    )
+    return load_checkpoint(model, ckpt_path, device=device)

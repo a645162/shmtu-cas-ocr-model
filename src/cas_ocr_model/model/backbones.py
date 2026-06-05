@@ -1,16 +1,17 @@
 """Backbone 工厂: 把 torchvision ResNet 改造成"接收 1-通道灰度图".
 
-当前实现: ResNet-18 / ResNet-34. 后续可加入 ConvNeXt / EfficientNet / ViT 等.
+当前实现: ResNet-18 / ResNet-34. 输出保留空间特征图, 便于后续按宽度做槽位解码.
 
 设计原则:
-    * backbone 输出固定维度 (B, feat_dim) 的全局特征向量
+    * backbone 输出固定维度 (B, feat_dim, H', W') 的空间特征图
     * 第一层 conv 改成 in_channels=1 (验证码是灰度)
-    * 原 fc 层替换为 nn.Identity (下游 head 自己接)
+    * 预训练 RGB conv1 权重按通道均值迁移到灰度 conv1
 """
 from __future__ import annotations
 
 from typing import Callable, Dict, Tuple
 
+import torch
 import torch.nn as nn
 from torchvision import models
 
@@ -38,15 +39,33 @@ def _register(name: str):
 # ----------------------------------------------------------------------------
 
 
+def _to_grayscale_conv(conv: nn.Conv2d) -> nn.Conv2d:
+    gray = nn.Conv2d(
+        1,
+        conv.out_channels,
+        kernel_size=conv.kernel_size,
+        stride=conv.stride,
+        padding=conv.padding,
+        bias=False,
+    )
+    with torch.no_grad():
+        gray.weight.copy_(conv.weight.mean(dim=1, keepdim=True))
+    return gray
+
+
+def _spatialize_resnet(net: nn.Module) -> Tuple[nn.Module, int]:
+    feat_dim = net.fc.in_features
+    net.conv1 = _to_grayscale_conv(net.conv1)
+    features = nn.Sequential(*list(net.children())[:-2])
+    return features, feat_dim
+
+
 @_register("resnet18")
 def _resnet18(pretrained: bool) -> Tuple[nn.Module, int]:
     net = models.resnet18(
         weights=models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
     )
-    feat_dim = net.fc.in_features  # 512
-    net.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-    net.fc = nn.Identity()
-    return net, feat_dim
+    return _spatialize_resnet(net)
 
 
 @_register("resnet34")
@@ -54,10 +73,7 @@ def _resnet34(pretrained: bool) -> Tuple[nn.Module, int]:
     net = models.resnet34(
         weights=models.ResNet34_Weights.IMAGENET1K_V1 if pretrained else None
     )
-    feat_dim = net.fc.in_features  # 512
-    net.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-    net.fc = nn.Identity()
-    return net, feat_dim
+    return _spatialize_resnet(net)
 
 
 # 未来可加:
@@ -83,7 +99,7 @@ def build_resnet_backbone(
         pretrained: 是否加载 ImageNet 预训练权重
 
     Returns:
-        (model, feat_dim). model 已替换 conv1 / fc, 直接接 head 即可.
+        (model, feat_dim). model 输出空间特征图, 直接接位置感知 head 即可.
     """
     if name not in _BACKBONE_REGISTRY:
         raise ValueError(

@@ -1,6 +1,13 @@
 # Vibe Coding
 .omc/
 
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+
 /workdir/
 /3rdparty/
 

@@ -53,6 +53,9 @@ def common_parser(p: argparse.ArgumentParser) -> None:
     p.add_argument("--image-size-h", type=int, default=64)
     p.add_argument("--image-size-w", type=int, default=192)
     p.add_argument("--threshold", type=int, default=200)
+    p.add_argument("--binarize-mode", default="min_channel_otsu")
+    p.add_argument("--adaptive-block-size", type=int, default=25)
+    p.add_argument("--adaptive-c", type=int, default=15)
     p.add_argument("--batch-size", type=int, default=32)
 
 
@@ -62,6 +65,9 @@ def cmd_predict(args: argparse.Namespace) -> int:
         image_size_h=args.image_size_h,
         image_size_w=args.image_size_w,
         threshold=args.threshold,
+        binarize_mode=args.binarize_mode,
+        adaptive_block_size=args.adaptive_block_size,
+        adaptive_c=args.adaptive_c,
         batch_size=args.batch_size,
     )
     inferencer = CaptchaInferencer(backend=backend, config=cfg)
@@ -114,6 +120,9 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
         image_size_h=args.image_size_h,
         image_size_w=args.image_size_w,
         threshold=args.threshold,
+        binarize_mode=args.binarize_mode,
+        adaptive_block_size=args.adaptive_block_size,
+        adaptive_c=args.adaptive_c,
         batch_size=args.batch_size,
     )
     inferencer = CaptchaInferencer(backend=backend, config=cfg)
@@ -148,6 +157,9 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         image_size_h=args.image_size_h,
         image_size_w=args.image_size_w,
         threshold=args.threshold,
+        binarize_mode=args.binarize_mode,
+        adaptive_block_size=args.adaptive_block_size,
+        adaptive_c=args.adaptive_c,
         batch_size=args.batch_size,
     )
     inferencer = CaptchaInferencer(backend=backend, config=cfg)

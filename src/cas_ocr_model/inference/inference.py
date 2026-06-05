@@ -51,6 +51,9 @@ class InferencerConfig:
     image_size_h: int = 64
     image_size_w: int = 192
     threshold: int = 200
+    binarize_mode: str = "min_channel_otsu"
+    adaptive_block_size: int = 25
+    adaptive_c: int = 15
     batch_size: int = 32
 
 
@@ -102,7 +105,12 @@ class CaptchaInferencer:
         self.backend = backend
         self.config = config or InferencerConfig()
         self.preprocess = preprocess or build_preprocess(
-            self.config.image_size_h, self.config.image_size_w, self.config.threshold
+            self.config.image_size_h,
+            self.config.image_size_w,
+            self.config.threshold,
+            self.config.binarize_mode,
+            self.config.adaptive_block_size,
+            self.config.adaptive_c,
         )
         self.digit_labels = backend.label_dict["digit_labels"]
         self.operator_labels = backend.label_dict["operator_labels"]

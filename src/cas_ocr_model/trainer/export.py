@@ -14,9 +14,19 @@ from __future__ import annotations
 import argparse
 
 import torch
+import torch.nn as nn
 
-from .config import NUM_DIGIT_CLASSES, NUM_OPERATOR_CLASSES
-from .model import CaptchaTripleHeadCNN, load_checkpoint
+from .model import build_model_from_checkpoint
+
+
+class ExportWrapper(nn.Module):
+    def __init__(self, model: nn.Module) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        out = self.model(x)
+        return out["digit_left_logits"], out["operator_logits"], out["digit_right_logits"]
 
 
 def main() -> None:
@@ -30,14 +40,9 @@ def main() -> None:
     p.add_argument("--dynamic-batch", action="store_true", help="动态 batch 维度")
     args = p.parse_args()
 
-    model = CaptchaTripleHeadCNN(
-        backbone=args.backbone,
-        pretrained=False,
-        num_digit_classes=NUM_DIGIT_CLASSES,
-        num_operator_classes=NUM_OPERATOR_CLASSES,
-    )
-    load_checkpoint(model, args.checkpoint, device="cpu")
+    model = build_model_from_checkpoint(args.checkpoint, device="cpu")
     model.eval()
+    wrapper = ExportWrapper(model)
 
     dummy = torch.randn(1, 1, args.image_size_h, args.image_size_w, dtype=torch.float32)
     dynamic_axes = None
@@ -50,7 +55,7 @@ def main() -> None:
         }
 
     torch.onnx.export(
-        model,
+        wrapper,
         dummy,
         args.output,
         input_names=["input"],

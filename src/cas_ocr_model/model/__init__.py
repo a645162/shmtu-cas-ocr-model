@@ -14,12 +14,18 @@
     predict_triple                    - 批量 argmax -> 字符串表达式
 """
 from .backbones import build_resnet_backbone, list_available_backbones
-from .captcha_triple_head_cnn import CaptchaTripleHeadCNN, load_checkpoint, predict_triple
+from .captcha_triple_head_cnn import (
+    CaptchaTripleHeadCNN,
+    build_model_from_checkpoint,
+    load_checkpoint,
+    predict_triple,
+)
 from .heads import TripleHead
 
 __all__ = [
     # 当前模型
     "CaptchaTripleHeadCNN",
+    "build_model_from_checkpoint",
     "load_checkpoint",
     "predict_triple",
     # backbone / head 工具

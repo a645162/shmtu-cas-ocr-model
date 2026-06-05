@@ -88,20 +88,11 @@ def train_one_epoch(
     epoch: int,
 ) -> dict[str, float]:
     model.train()
-    metric_sum = {
-        "loss": 0.0,
-        "loss_digit_left": 0.0,
-        "loss_operator": 0.0,
-        "loss_digit_right": 0.0,
-        "acc_digit_left": 0.0,
-        "acc_operator": 0.0,
-        "acc_digit_right": 0.0,
-        "acc_expression": 0.0,
-    }
+    metric_sum = {"loss": 0.0}
     n = 0
     t0 = time.time()
     for step, (images, labels) in enumerate(loader):
-        outputs = model(images)
+        outputs = model(images, return_aux=True)
         losses = loss_fn(outputs, labels)
         loss = losses["loss"]
         accs = compute_accuracy(outputs, labels)
@@ -116,9 +107,11 @@ def train_one_epoch(
         bs = images.size(0)
         for k, v in losses.items():
             if k != "loss":
+                metric_sum.setdefault(k, 0.0)
                 metric_sum[k] += v.item() * bs
         metric_sum["loss"] += loss.item() * bs
         for k, v in accs.items():
+            metric_sum.setdefault(k, 0.0)
             metric_sum[k] += v * bs
         n += bs
 
@@ -169,6 +162,9 @@ def main() -> None:
         image_size_h=cfg.data.image_size_h,
         image_size_w=cfg.data.image_size_w,
         threshold=cfg.data.threshold,
+        binarize_mode=cfg.data.binarize_mode,
+        adaptive_block_size=cfg.data.adaptive_block_size,
+        adaptive_c=cfg.data.adaptive_c,
         split="train",
     )
     val_ds = CaptchaPairDataset(
@@ -176,6 +172,9 @@ def main() -> None:
         image_size_h=cfg.data.image_size_h,
         image_size_w=cfg.data.image_size_w,
         threshold=cfg.data.threshold,
+        binarize_mode=cfg.data.binarize_mode,
+        adaptive_block_size=cfg.data.adaptive_block_size,
+        adaptive_c=cfg.data.adaptive_c,
         split="val",
     )
     has_test = (Path(cfg.data.data_root) / "manifest.json").is_file() and bool(
@@ -189,6 +188,9 @@ def main() -> None:
                 image_size_h=cfg.data.image_size_h,
                 image_size_w=cfg.data.image_size_w,
                 threshold=cfg.data.threshold,
+                binarize_mode=cfg.data.binarize_mode,
+                adaptive_block_size=cfg.data.adaptive_block_size,
+                adaptive_c=cfg.data.adaptive_c,
                 split="test",
             )
         except RuntimeError as e:
@@ -198,7 +200,7 @@ def main() -> None:
         f"[data] train={len(train_ds)} val={len(val_ds)} "
         f"test={len(test_ds) if test_ds else 0} "
         f"image_size=({cfg.data.image_size_h},{cfg.data.image_size_w}) "
-        f"threshold={cfg.data.threshold}"
+        f"binarize={cfg.data.binarize_mode}"
     )
 
     train_loader = DataLoader(
@@ -239,6 +241,8 @@ def main() -> None:
         backbone=cfg.model.backbone,
         pretrained=cfg.model.pretrained,
         dropout=cfg.model.dropout,
+        slot_hidden_dim=cfg.model.slot_hidden_dim,
+        slot_attention_heads=cfg.model.slot_attention_heads,
         num_digit_classes=NUM_DIGIT_CLASSES,
         num_operator_classes=NUM_OPERATOR_CLASSES,
     )
@@ -247,8 +251,12 @@ def main() -> None:
             digit_left=cfg.loss.weight_digit_left,
             operator=cfg.loss.weight_operator,
             digit_right=cfg.loss.weight_digit_right,
+            slot_order=cfg.loss.weight_slot_order,
+            slot_overlap=cfg.loss.weight_slot_overlap,
         ),
         label_smoothing=cfg.loss.label_smoothing,
+        focal_gamma=cfg.loss.focal_gamma,
+        slot_margin=cfg.loss.slot_margin,
     )
 
     # 8 卡 DDP 建议: lr * world_size 线性缩放; 让用户用 --learning-rate 自行缩放,
@@ -357,27 +365,20 @@ def evaluate(
     loss_fn: TripleHeadLoss,
 ) -> dict[str, float]:
     model.eval()
-    metric_sum = {
-        "loss": 0.0,
-        "loss_digit_left": 0.0,
-        "loss_operator": 0.0,
-        "loss_digit_right": 0.0,
-        "acc_digit_left": 0.0,
-        "acc_operator": 0.0,
-        "acc_digit_right": 0.0,
-        "acc_expression": 0.0,
-    }
+    metric_sum = {"loss": 0.0}
     n = 0
     for images, labels in loader:
-        outputs = model(images)
+        outputs = model(images, return_aux=True)
         losses = loss_fn(outputs, labels)
         accs = compute_accuracy(outputs, labels)
         bs = images.size(0)
         for k, v in losses.items():
             if k != "loss":
+                metric_sum.setdefault(k, 0.0)
                 metric_sum[k] += v.item() * bs
         metric_sum["loss"] += losses["loss"].item() * bs
         for k, v in accs.items():
+            metric_sum.setdefault(k, 0.0)
             metric_sum[k] += v * bs
         n += bs
     return {k: v / max(1, n) for k, v in metric_sum.items()}
