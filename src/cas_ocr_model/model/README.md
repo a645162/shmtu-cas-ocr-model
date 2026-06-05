@@ -40,6 +40,6 @@ from cas_ocr_model.model import (
 1. 接收 `x: (B, 1, H, W) float32 ∈ [0, 1]`
 2. `forward` 返回 dict, **至少** 含:
    - `digit_left_logits`:  (B, 10)
-   - `operator_logits`:   (B, 4)
+   - `operator_logits`:   (B, 3)
    - `digit_right_logits`: (B, 10)
 3. `load_checkpoint(model, path)` 可以加载 (兼容 DDP `module.` 前缀)

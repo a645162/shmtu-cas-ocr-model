@@ -23,14 +23,12 @@ from cas_ocr_model.preprocess_ops import BINARIZE_MODES
 DIGIT_LABELS: list[str] = [str(i) for i in range(10)]  # 10 类
 DIGIT2IDX = {s: i for i, s in enumerate(DIGIT_LABELS)}
 
-# 运算符 4 类 (与数据集 expression 字符串保持一致; 不再分"符号/文字"独立 head)
-#   + 加   - 减   * 乘   / 除
-# 注: 如果数据集里出现 = 等号, 应在数据采集阶段过滤; 此处不处理.
+# 运算符 3 类. 数据集中的 "加/减/乘" 与 "+/-/*" 会在 expression 解析阶段自动归一.
 OPERATOR_LABELS: list[str] = list(CANONICAL_OPERATOR_LABELS)
 OP2IDX = {s: i for i, s in enumerate(OPERATOR_LABELS)}
 
 NUM_DIGIT_CLASSES = len(DIGIT_LABELS)   # 10
-NUM_OPERATOR_CLASSES = len(OPERATOR_LABELS)  # 4
+NUM_OPERATOR_CLASSES = len(OPERATOR_LABELS)  # 3
 
 
 # ----------------------------------------------------------------------------

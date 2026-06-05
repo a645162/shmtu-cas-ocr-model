@@ -5,7 +5,7 @@
 调用:
     accelerate launch --num_processes 8 --mixed_precision fp16 \\
         -m cas_ocr_model.inference.multi_gpu_benchmark \\
-        --backend pytorch --checkpoint runs/exp1/best.pt \\
+        --checkpoint runs/exp1/best.pt \\
         --data-root ./dataset --output report.json
 
 注: 想要单卡速度请用 single_gpu_benchmark.py.
@@ -25,25 +25,16 @@ from .evaluate import evaluate, metrics_to_dict
 
 
 def build_backend(args: argparse.Namespace):
-    if args.backend == "pytorch":
-        from .backends.pytorch_backend import PyTorchBackend
-        return PyTorchBackend(
-            checkpoint=args.checkpoint,
-            backbone=args.backbone,
-            device="cuda" if torch.cuda.is_available() else "cpu",
-        )
-    if args.backend == "onnx":
-        from .backends.onnx_backend import OnnxBackend
-        return OnnxBackend(
-            onnx_path=args.checkpoint,
-            device="cuda" if torch.cuda.is_available() else "cpu",
-        )
-    raise ValueError(f"unknown backend: {args.backend}")
+    from .backends.pytorch_backend import PyTorchBackend
+    return PyTorchBackend(
+        checkpoint=args.checkpoint,
+        backbone=args.backbone,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+    )
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description="多卡 DDP 精度 benchmark (test 集)")
-    p.add_argument("--backend", choices=["pytorch", "onnx"], default="pytorch")
     p.add_argument("--checkpoint", required=True)
     p.add_argument("--backbone", default="resnet18")
     p.add_argument("--data-root", required=True, help="含 manifest.json + test split 的目录")

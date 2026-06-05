@@ -5,7 +5,7 @@
 | 头 | 类别数 | 说明 |
 |---|---|---|
 | `digit_left_logits`  | 10  | 第一个数字 (0-9) |
-| `operator_logits`    | 4   | 运算符 (`+ - * /`, 4 类统一) |
+| `operator_logits`    | 3   | 运算符 (`+ - *`, 自动兼容 `加/减/乘`) |
 | `digit_right_logits` | 10  | 第二个数字 (0-9) |
 
 与 `v1` 区别: 不再切 3 段、不再单独训练等号识别模型, 一个 ResNet-18 backbone 一次出 3 个 logits。
@@ -23,7 +23,6 @@ trainer/
 ├── export.py     # ONNX 导出
 ├── configs/
 │   └── 8gpu_ddp.yaml
-└── requirements.txt
 ```
 
 ## 数据集
@@ -40,11 +39,17 @@ python -m cas_ocr_model.datasets.dataset_collector \
 ```
 dataset/
   00000000.jpg
-  00000000.json   {"expression": "12+34=46", ...}
+  00000000.json   {"expression": "9 - 2 = 7", "answer": "7", ...}
   ...
 ```
 
-`data.py` 自动按 `^(\d)([+\-*/])(\d)=$` 正则解析 expression; 不符合则跳过。
+`data.py` 会自动解析 `expression`，支持这几类格式并统一映射到 3 类运算符:
+- `9 - 2 = 7`
+- `9-2=7`
+- `9减2等于7`
+- `9 乘 2 = 18`
+
+解析失败的样本会被自动跳过。
 
 ## 训练 (8 卡 DDP)
 
@@ -98,12 +103,12 @@ python -m cas_ocr_model.trainer.export \
 ```
 
 输入: `(B, 1, 64, 192) float32 ∈ [0, 1]`
-输出: 3 个 logits `(B, 10)`, `(B, 4)`, `(B, 10)`
+输出: 3 个 logits `(B, 10)`, `(B, 3)`, `(B, 10)`
 
 ## 依赖
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 `accelerate>=0.27` 是 DDP 入口, 第一次跑前执行 `accelerate config` 选择本机环境。

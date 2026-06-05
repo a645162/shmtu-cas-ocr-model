@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-CANONICAL_OPERATOR_LABELS: tuple[str, ...] = ("+", "-", "*", "/")
+CANONICAL_OPERATOR_LABELS: tuple[str, ...] = ("+", "-", "*")
 OPERATOR_ALIASES: dict[str, str] = {
     "+": "+",
     "＋": "+",
@@ -21,11 +21,6 @@ OPERATOR_ALIASES: dict[str, str] = {
     "X": "*",
     "乘": "*",
     "乘以": "*",
-    "/": "/",
-    "／": "/",
-    "÷": "/",
-    "除": "/",
-    "除以": "/",
 }
 EQUAL_ALIASES: tuple[str, ...] = ("=", "＝", "等", "等于")
 

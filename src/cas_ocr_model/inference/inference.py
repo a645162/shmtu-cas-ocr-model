@@ -81,8 +81,6 @@ def _safe_eval(d1: int, op: str, d2: int) -> Optional[int]:
             return d1 - d2
         if op == "*":
             return d1 * d2
-        if op == "/":
-            return d1 // d2 if d2 != 0 else None
     except Exception:
         return None
     return None
@@ -151,7 +149,7 @@ class CaptchaInferencer:
 
     def _logits_to_results(self, logits: dict[str, np.ndarray]) -> List[InferenceResult]:
         dl = logits["digit_left_logits"]    # (B, 10)
-        op = logits["operator_logits"]      # (B, 4)
+        op = logits["operator_logits"]      # (B, 3)
         dr = logits["digit_right_logits"]   # (B, 10)
 
         # softmax

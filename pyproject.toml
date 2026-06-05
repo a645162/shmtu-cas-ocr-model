@@ -14,23 +14,17 @@ authors = [
 ]
 
 dependencies = [
+    "accelerate>=0.27",
     "opencv-python>=4.5.0",
     "numpy",
     "scikit-learn",
     "pillow",
+    "pyyaml",
     "torch>=2.0.0",
     "torchvision",
     "tqdm",
     "rich>=13.0",
-    "selenium>=4.0.0",
-    "webdriver-manager",
     "matplotlib",
-    "jupyter",
-    "notebook",
-    "openvino-dev",
-    "onnx",
-    "onnxruntime",
-    "onnxconverter-common",
 ]
 
 [tool.setuptools.packages.find]

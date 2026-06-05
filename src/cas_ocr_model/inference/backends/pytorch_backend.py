@@ -42,7 +42,7 @@ class PyTorchBackend:
 
         返回 dict, 3 个 logits 数组:
             digit_left_logits:  (B, 10) float32
-            operator_logits:    (B, 4)  float32
+            operator_logits:    (B, 3)  float32
             digit_right_logits: (B, 10) float32
         """
         image = image.to(self.device, non_blocking=True)

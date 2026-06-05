@@ -9,7 +9,7 @@
 manifest.json 字段:
     version:        int       规范版本, 后续可演进
     created_at:     int       unix 秒
-    label_set:      dict      {"digit": ["0".."9"], "operator": ["+","-","*",""/"]}
+    label_set:      dict      {"digit": ["0".."9"], "operator": ["+","-","*"]}
     source:         dict      采集来源 (backend, ocr_url, ...)
     splits:         dict      {"train": [...], "val": [...], "test": [...]}
     stats:          dict      {"n_total": int, "n_train": int, "n_val": int, "n_test": int}
@@ -37,7 +37,7 @@ MANIFEST_VERSION = 1
 class DatasetManifest:
     version: int = MANIFEST_VERSION
     created_at: int = 0
-    label_set: dict = field(default_factory=lambda: {"digit": [str(i) for i in range(10)], "operator": ["+", "-", "*", "/"]})
+    label_set: dict = field(default_factory=lambda: {"digit": [str(i) for i in range(10)], "operator": ["+", "-", "*"]})
     source: dict = field(default_factory=dict)
     splits: dict = field(default_factory=lambda: {"train": [], "val": [], "test": []})
     stats: dict = field(default_factory=dict)

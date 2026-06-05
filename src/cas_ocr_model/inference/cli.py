@@ -3,17 +3,17 @@
 用法:
     # 1) 单图 / 批量目录预测
     python -m cas_ocr_model.inference.cli --mode predict \\
-        --backend pytorch --checkpoint runs/exp1/best.pt \\
+        --checkpoint runs/exp1/best.pt \\
         --image dataset/00000007.jpg
 
     # 2) 在带 ground-truth 的数据集上计算指标
     python -m cas_ocr_model.inference.cli --mode evaluate \\
-        --backend pytorch --checkpoint runs/exp1/best.pt \\
+        --checkpoint runs/exp1/best.pt \\
         --gt-dir dataset --output report.json
 
     # 3) 性能 benchmark
     python -m cas_ocr_model.inference.cli --mode benchmark \\
-        --backend pytorch --checkpoint runs/exp1/best.pt \\
+        --checkpoint runs/exp1/best.pt \\
         --num-samples 500 --batch-sizes 1,8,32,128
 """
 from __future__ import annotations
@@ -24,30 +24,20 @@ import sys
 from pathlib import Path
 
 from .inference import CaptchaInferencer, InferencerConfig
-from .preprocess import build_preprocess
 
 
-def build_backend(args: argparse.Namespace, name: str):
-    if name == "pytorch":
-        from .backends.pytorch_backend import PyTorchBackend
-        return PyTorchBackend(
-            checkpoint=args.checkpoint,
-            backbone=args.backbone,
-            device=args.device,
-        ), "pytorch"
-    if name == "onnx":
-        from .backends.onnx_backend import OnnxBackend
-        return OnnxBackend(
-            onnx_path=args.checkpoint,
-            device=args.device,
-        ), "onnx"
-    raise ValueError(f"unknown backend: {name}")
+def build_backend(args: argparse.Namespace):
+    from .backends.pytorch_backend import PyTorchBackend
+    return PyTorchBackend(
+        checkpoint=args.checkpoint,
+        backbone=args.backbone,
+        device=args.device,
+    )
 
 
 def common_parser(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--backend", choices=["pytorch", "onnx"], required=True)
-    p.add_argument("--checkpoint", required=True, help="best.pt 或 model.onnx")
-    p.add_argument("--backbone", default="resnet18", help="仅 pytorch 后端")
+    p.add_argument("--checkpoint", required=True, help="best.pt")
+    p.add_argument("--backbone", default="resnet18")
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
 
     p.add_argument("--image-size-h", type=int, default=64)
@@ -60,7 +50,7 @@ def common_parser(p: argparse.ArgumentParser) -> None:
 
 
 def cmd_predict(args: argparse.Namespace) -> int:
-    backend, _ = build_backend(args, args.backend)
+    backend = build_backend(args)
     cfg = InferencerConfig(
         image_size_h=args.image_size_h,
         image_size_w=args.image_size_w,
@@ -115,7 +105,7 @@ def cmd_predict(args: argparse.Namespace) -> int:
 def cmd_evaluate(args: argparse.Namespace) -> int:
     from .evaluate import evaluate, metrics_to_dict
 
-    backend, _ = build_backend(args, args.backend)
+    backend = build_backend(args)
     cfg = InferencerConfig(
         image_size_h=args.image_size_h,
         image_size_w=args.image_size_w,
@@ -152,7 +142,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
 def cmd_benchmark(args: argparse.Namespace) -> int:
     from .benchmark import benchmark, print_report, report_to_dict
 
-    backend, name = build_backend(args, args.backend)
+    backend = build_backend(args)
     cfg = InferencerConfig(
         image_size_h=args.image_size_h,
         image_size_w=args.image_size_w,
@@ -170,7 +160,7 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         n_samples=args.num_samples,
         warmup=args.warmup,
         batch_sizes=bs_list,
-        backend_name=name,
+        backend_name="pytorch",
     )
     print_report(rpt)
 

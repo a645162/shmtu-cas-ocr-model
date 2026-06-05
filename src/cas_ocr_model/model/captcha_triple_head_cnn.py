@@ -33,7 +33,7 @@ class CaptchaTripleHeadCNN(nn.Module):
         slot_hidden_dim: int = 256,
         slot_attention_heads: int = 4,
         num_digit_classes: int = 10,
-        num_operator_classes: int = 4,
+        num_operator_classes: int = 3,
     ) -> None:
         super().__init__()
         self.backbone_name = backbone
@@ -129,5 +129,7 @@ def build_model_from_checkpoint(
         dropout=model_cfg.get("dropout", 0.2),
         slot_hidden_dim=model_cfg.get("slot_hidden_dim", 256),
         slot_attention_heads=model_cfg.get("slot_attention_heads", 4),
+        num_digit_classes=10,
+        num_operator_classes=3,
     )
     return load_checkpoint(model, ckpt_path, device=device)

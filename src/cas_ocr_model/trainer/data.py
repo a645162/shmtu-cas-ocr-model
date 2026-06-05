@@ -37,7 +37,7 @@ class CaptchaSample:
     image_path: Path
     json_path: Path
     digit_left: int   # 0-9
-    operator: int     # 0-3  (索引到 OPERATOR_LABELS)
+    operator: int     # 0-2  (索引到 OPERATOR_LABELS)
     digit_right: int  # 0-9
     expression: str   # 原始 expression, 调试用
 

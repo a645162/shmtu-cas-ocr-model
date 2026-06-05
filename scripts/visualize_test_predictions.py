@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import random
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC_DIR = ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from cas_ocr_model.datasets.format import DatasetManifest
+from cas_ocr_model.inference import CaptchaInferencer, InferencerConfig
+from cas_ocr_model.inference.backends.pytorch_backend import PyTorchBackend
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="从 test split 随机抽样并输出按预测表达式命名的图片"
+    )
+    p.add_argument("--data-root", required=True, help="含 manifest.json 的数据集目录")
+    p.add_argument("--checkpoint", required=True, help="PyTorch checkpoint 路径")
+    p.add_argument("--output-dir", default="output", help="输出根目录")
+    p.add_argument("--subdir", default=None, help="输出子目录名, 默认自动生成")
+    p.add_argument("--n", type=int, default=20, help="随机抽样数量")
+    p.add_argument("--seed", type=int, default=42, help="随机种子")
+    p.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
+    p.add_argument("--backbone", default="resnet18")
+    p.add_argument("--image-size-h", type=int, default=64)
+    p.add_argument("--image-size-w", type=int, default=192)
+    p.add_argument("--threshold", type=int, default=200)
+    p.add_argument("--binarize-mode", default="min_channel_otsu")
+    p.add_argument("--adaptive-block-size", type=int, default=25)
+    p.add_argument("--adaptive-c", type=int, default=15)
+    p.add_argument("--batch-size", type=int, default=32)
+    return p.parse_args()
+
+
+def build_inferencer(args: argparse.Namespace) -> CaptchaInferencer:
+    backend = PyTorchBackend(
+        checkpoint=args.checkpoint,
+        backbone=args.backbone,
+        device=args.device,
+    )
+    cfg = InferencerConfig(
+        image_size_h=args.image_size_h,
+        image_size_w=args.image_size_w,
+        threshold=args.threshold,
+        binarize_mode=args.binarize_mode,
+        adaptive_block_size=args.adaptive_block_size,
+        adaptive_c=args.adaptive_c,
+        batch_size=args.batch_size,
+    )
+    return CaptchaInferencer(backend=backend, config=cfg)
+
+
+def sanitize_expr_filename(expr: str, result: int | None) -> str:
+    compact = "".join(expr.split())
+    stem = f"{compact}={result}" if result is not None else compact
+    return stem.replace("/", "_")
+
+
+def choose_test_samples(data_root: Path, n: int, seed: int) -> list[Path]:
+    manifest = DatasetManifest.load(data_root)
+    test_files = list(manifest.splits.get("test", []))
+    if not test_files:
+        raise RuntimeError("manifest.json 中没有 test split")
+    jpg_paths = [data_root / name for name in test_files]
+    jpg_paths = [p for p in jpg_paths if p.is_file()]
+    if not jpg_paths:
+        raise RuntimeError("test split 没有可用图片文件")
+    rng = random.Random(seed)
+    sample_size = min(n, len(jpg_paths))
+    return rng.sample(jpg_paths, sample_size)
+
+
+def make_output_subdir(output_dir: Path, subdir: str | None, n: int, seed: int) -> Path:
+    name = subdir or f"test_samples_n{n}_seed{seed}"
+    out = output_dir / name
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def save_contact_sheet(records: list[dict], output_path: Path) -> None:
+    if not records:
+        return
+
+    thumb_w = 192
+    thumb_h = 64
+    padding = 12
+    caption_h = 44
+    cols = min(4, len(records))
+    rows = math.ceil(len(records) / cols)
+    canvas_w = cols * (thumb_w + padding) + padding
+    canvas_h = rows * (thumb_h + caption_h + padding) + padding
+    canvas = Image.new("RGB", (canvas_w, canvas_h), color=(245, 245, 245))
+    draw = ImageDraw.Draw(canvas)
+    font = ImageFont.load_default()
+
+    for idx, record in enumerate(records):
+        row, col = divmod(idx, cols)
+        x = padding + col * (thumb_w + padding)
+        y = padding + row * (thumb_h + caption_h + padding)
+
+        img = Image.open(record["source_path"]).convert("RGB")
+        img = img.resize((thumb_w, thumb_h))
+        canvas.paste(img, (x, y))
+
+        caption = f'{record["prediction"]}  conf={record["confidence"]:.3f}'
+        draw.text((x, y + thumb_h + 6), caption, fill=(20, 20, 20), font=font)
+
+    canvas.save(output_path)
+
+
+def main() -> int:
+    args = parse_args()
+    data_root = Path(args.data_root)
+    output_dir = Path(args.output_dir)
+    inferencer = build_inferencer(args)
+
+    sample_paths = choose_test_samples(data_root, args.n, args.seed)
+    results = inferencer.predict_batch(sample_paths)
+
+    out_dir = make_output_subdir(output_dir, args.subdir, len(sample_paths), args.seed)
+    name_counts: defaultdict[str, int] = defaultdict(int)
+    records: list[dict] = []
+
+    for src_path, pred in zip(sample_paths, results):
+        stem = sanitize_expr_filename(pred.expression, pred.result)
+        name_counts[stem] += 1
+        suffix = f"__{name_counts[stem]}" if name_counts[stem] > 1 else ""
+        dst_name = f"{stem}{suffix}{src_path.suffix.lower()}"
+        dst_path = out_dir / dst_name
+        dst_path.write_bytes(src_path.read_bytes())
+
+        records.append(
+            {
+                "source_image": src_path.name,
+                "source_path": str(src_path),
+                "saved_image": dst_name,
+                "prediction": pred.expression,
+                "result": pred.result,
+                "confidence": pred.confidence,
+            }
+        )
+
+    save_contact_sheet(records, out_dir / "contact_sheet.jpg")
+
+    manifest = {
+        "data_root": str(data_root),
+        "checkpoint": args.checkpoint,
+        "n": len(records),
+        "seed": args.seed,
+        "output_dir": str(out_dir),
+        "records": [
+            {
+                "source_image": r["source_image"],
+                "saved_image": r["saved_image"],
+                "prediction": r["prediction"],
+                "result": r["result"],
+                "confidence": r["confidence"],
+            }
+            for r in records
+        ],
+    }
+    (out_dir / "predictions.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    print(f"[saved] {out_dir}")
+    print(f"[count] {len(records)}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

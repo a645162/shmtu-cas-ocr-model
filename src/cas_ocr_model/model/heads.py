@@ -12,7 +12,7 @@ class TripleHead(nn.Module):
         self,
         feat_dim: int,
         num_digit_classes: int = 10,
-        num_operator_classes: int = 4,
+        num_operator_classes: int = 3,
         hidden_dim: int = 256,
         attention_heads: int = 4,
         dropout: float = 0.2,

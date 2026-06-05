@@ -1,10 +1,10 @@
 """单卡推理速度 benchmark.
 
-测量单卡 (PyTorch / ONNX) 上的延迟 / 吞吐量, 用于评估部署性能.
+测量单卡 PyTorch 上的延迟 / 吞吐量, 用于评估部署性能.
 
 调用:
     python -m cas_ocr_model.inference.single_gpu_benchmark \\
-        --backend pytorch --checkpoint runs/exp1/best.pt \\
+        --checkpoint runs/exp1/best.pt \\
         --device cuda \\
         --num-samples 1000 --batch-sizes 1,8,32,128 \\
         --output bench.json
@@ -69,20 +69,12 @@ class SingleGpuReport:
 
 
 def build_backend(args: argparse.Namespace):
-    if args.backend == "pytorch":
-        from .backends.pytorch_backend import PyTorchBackend
-        return PyTorchBackend(
-            checkpoint=args.checkpoint,
-            backbone=args.backbone,
-            device=args.device,
-        )
-    if args.backend == "onnx":
-        from .backends.onnx_backend import OnnxBackend
-        return OnnxBackend(
-            onnx_path=args.checkpoint,
-            device=args.device,
-        )
-    raise ValueError(f"unknown backend: {args.backend}")
+    from .backends.pytorch_backend import PyTorchBackend
+    return PyTorchBackend(
+        checkpoint=args.checkpoint,
+        backbone=args.backbone,
+        device=args.device,
+    )
 
 
 def _build_synthetic_batch(inferencer: CaptchaInferencer, batch_size: int) -> torch.Tensor:
@@ -181,7 +173,6 @@ def print_report(r: SingleGpuReport) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="单卡推理速度 benchmark")
-    p.add_argument("--backend", choices=["pytorch", "onnx"], default="pytorch")
     p.add_argument("--checkpoint", required=True)
     p.add_argument("--backbone", default="resnet18")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu",
@@ -210,7 +201,7 @@ def main() -> None:
         n_samples=args.num_samples,
         warmup=args.warmup,
         batch_sizes=bs_list,
-        backend_name=args.backend,
+        backend_name="pytorch",
         device_str=args.device,
     )
     print_report(rpt)

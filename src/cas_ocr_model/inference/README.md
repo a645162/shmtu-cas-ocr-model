@@ -1,6 +1,6 @@
 # 推理子包
 
-对外提供 3-head 验证码模型的推理能力, 支持 PyTorch 与 ONNX Runtime 两种后端。
+对外提供 3-head 验证码模型的 PyTorch 推理能力。
 
 ## 目录
 
@@ -11,8 +11,7 @@ inference/
 ├── preprocess.py                     # 灰度+二值化+resize (与 trainer 一致)
 ├── backends/
 │   ├── __init__.py
-│   ├── pytorch_backend.py            # 本地 PyTorch 推理
-│   └── onnx_backend.py               # ONNX Runtime 推理
+│   └── pytorch_backend.py            # 本地 PyTorch 推理
 ├── cli.py                            # 命令行入口
 └── README.md
 ```
@@ -21,7 +20,7 @@ inference/
 
 ```python
 from cas_ocr_model.inference import CaptchaInferencer, InferencerConfig
-from cas_ocr_model.inference import PyTorchBackend, OnnxBackend
+from cas_ocr_model.inference import PyTorchBackend
 
 # PyTorch
 backend = PyTorchBackend("runs/exp1/best.pt", device="cuda")
@@ -32,10 +31,6 @@ print(result.expression, result.result, result.confidence)
 # 批量目录
 for name, r in inferencer.predict_dir("./dataset", limit=100):
     print(name, r.expression)
-
-# ONNX
-backend = OnnxBackend("runs/exp1/model.onnx", device="cpu")
-inferencer = CaptchaInferencer(backend)
 ```
 
 ## CLI
@@ -43,17 +38,12 @@ inferencer = CaptchaInferencer(backend)
 ```bash
 # 单图
 python -m cas_ocr_model.inference.cli \
-    --backend pytorch --checkpoint runs/exp1/best.pt \
-    --image dataset/00000007.jpg
-
-# ONNX 后端
-python -m cas_ocr_model.inference.cli \
-    --backend onnx --checkpoint runs/exp1/model.onnx \
+    --checkpoint runs/exp1/best.pt \
     --image dataset/00000007.jpg
 
 # 批量目录
 python -m cas_ocr_model.inference.cli \
-    --backend pytorch --checkpoint runs/exp1/best.pt \
+    --checkpoint runs/exp1/best.pt \
     --dir dataset --limit 50 --output preds.json
 ```
 
@@ -64,12 +54,12 @@ python -m cas_ocr_model.inference.cli \
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `digit_left`  | `str`  | 第一个数字字符 ("0"-"9") |
-| `operator`    | `str`  | 运算符 ("+", "-", "*", "/") |
+| `operator`    | `str`  | 运算符 ("+", "-", "*") |
 | `digit_right` | `str`  | 第二个数字字符 |
 | `expression`  | `str`  | 拼接后表达式, 如 "1+2" |
 | `result`      | `int`  | 算式求值结果, 不可计算时为 None |
 | `confidence`  | `float`| 3 个 head 各自的 argmax softmax 的最小值 (越接近 1 越确定) |
-| `softmax`     | `dict` | 每 head 的 10/4 维 softmax 概率分布 |
+| `softmax`     | `dict` | 每 head 的 10/3 维 softmax 概率分布 |
 
 ## 预处理一致性
 

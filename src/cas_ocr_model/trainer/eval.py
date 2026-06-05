@@ -18,13 +18,11 @@ from accelerate.utils import set_seed
 
 from .config import (
     FullConfig,
-    NUM_DIGIT_CLASSES,
-    NUM_OPERATOR_CLASSES,
     load_from_yaml,
 )
 from .data import CaptchaPairDataset, collate_triple
 from .losses import LossWeights, TripleHeadLoss
-from .model import CaptchaTripleHeadCNN, load_checkpoint
+from .model import build_model_from_checkpoint
 from .train import evaluate
 
 
@@ -68,16 +66,7 @@ def main() -> None:
         collate_fn=collate_triple,
     )
 
-    model = CaptchaTripleHeadCNN(
-        backbone=cfg.model.backbone,
-        pretrained=False,  # 评估时不需要再拉 ImageNet
-        dropout=cfg.model.dropout,
-        slot_hidden_dim=cfg.model.slot_hidden_dim,
-        slot_attention_heads=cfg.model.slot_attention_heads,
-        num_digit_classes=NUM_DIGIT_CLASSES,
-        num_operator_classes=NUM_OPERATOR_CLASSES,
-    )
-    load_checkpoint(model, args.checkpoint, device=accelerator.device)
+    model = build_model_from_checkpoint(args.checkpoint, device=accelerator.device)
     model = accelerator.prepare(model)
 
     loss_fn = TripleHeadLoss(

@@ -61,7 +61,6 @@ def _safe_eval(d1: int, op: str, d2: int) -> Optional[int]:
         if op == "+": return d1 + d2
         if op == "-": return d1 - d2
         if op == "*": return d1 * d2
-        if op == "/": return d1 // d2 if d2 != 0 else None
     except Exception:
         return None
     return None
@@ -145,7 +144,7 @@ def evaluate(
     corrects: list[int] = []
 
     conf_dl = np.zeros((10, 10), dtype=np.int64)
-    conf_op = np.zeros((4, 4), dtype=np.int64)
+    conf_op = np.zeros((len(operator_labels), len(operator_labels)), dtype=np.int64)
     conf_dr = np.zeros((10, 10), dtype=np.int64)
 
     per_sample: list[dict] = []

@@ -27,10 +27,11 @@
 | `cas_ocr_collect.sh`                | 启动 maker 采集 jpg+json | `bash scripts/cas_ocr_collect.sh` |
 | `cas_ocr_split.sh`                  | 物理分割 train/val/test + 写 manifest | `bash scripts/cas_ocr_split.sh` |
 | `cas_ocr_train.sh`                  | 8 卡 DDP 训练 (accelerate launch + fp16) | `bash scripts/cas_ocr_train.sh` |
-| `cas_ocr_export.sh`                 | best.pt → model.onnx | `bash scripts/cas_ocr_export.sh` |
+| `cas_ocr_export.sh`                 | best.pt → model.onnx (仅导出脚本使用 ONNX) | `bash scripts/cas_ocr_export.sh` |
 | `cas_ocr_evaluate.sh`               | 单卡 evaluate (test 集) | `bash scripts/cas_ocr_evaluate.sh` |
 | `cas_ocr_bench_multi.sh`            | 多卡 DDP 精度 benchmark | `bash scripts/cas_ocr_bench_multi.sh` |
 | `cas_ocr_bench_single.sh`           | 单卡速度 benchmark | `bash scripts/cas_ocr_bench_single.sh` |
+| `visualize_test_predictions.py`     | 随机抽样 test 集并按预测表达式导出图片 | `python scripts/visualize_test_predictions.py --data-root ./dataset --checkpoint ./runs/exp1/best.pt` |
 
 ## 一键式工作流
 
@@ -73,9 +74,23 @@ DEVICE=cpu NUM_SAMPLES=200 \
 # 仓库根一次性安装
 pip install -e ./Lib/shmtu-cas-python
 pip install -e ./Model/shmtu-cas-ocr-model
-# 或在 Model 目录:
-pip install -r src/cas_ocr_model/trainer/requirements.txt
 ```
+
+## 可视化脚本
+
+```bash
+python scripts/visualize_test_predictions.py \
+    --data-root ./dataset \
+    --checkpoint ./runs/exp1/best.pt \
+    --output-dir ./output \
+    --n 20 \
+    --device cuda
+```
+
+输出目录下会生成一个子目录，里面包含：
+- 按预测结果命名的采样图片，例如 `9-2=7.jpg`
+- `predictions.json`
+- `contact_sheet.jpg`
 
 ## 数据保存路径 (全部 gitignored)
 
