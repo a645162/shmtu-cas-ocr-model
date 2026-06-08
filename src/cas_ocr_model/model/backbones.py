@@ -40,6 +40,20 @@ def _register(name: str):
 # ----------------------------------------------------------------------------
 
 
+def _register_standard_grad_layout(param: nn.Parameter) -> None:
+    """规整 grad stride, 避免 DDP 对 size-1 通道卷积反复告警.
+
+    compile + DDP 下, 1 通道 conv 的梯度有时会以等价但不同 stride
+    (如 [9, 1, 3, 1]) 返回, 触发 reducer 的性能警告。
+    这里把 grad 显式 clone 到标准 contiguous_format。
+    """
+
+    def _hook(grad: torch.Tensor) -> torch.Tensor:
+        return grad.clone(memory_format=torch.contiguous_format)
+
+    param.register_hook(_hook)
+
+
 def _to_grayscale_conv(conv: nn.Conv2d) -> nn.Conv2d:
     gray = nn.Conv2d(
         1,
@@ -51,6 +65,10 @@ def _to_grayscale_conv(conv: nn.Conv2d) -> nn.Conv2d:
     )
     with torch.no_grad():
         gray.weight.copy_(conv.weight.mean(dim=1, keepdim=True))
+    
+    # Fix compiler + DDP grad stride warning for 1-channel conv.
+    # _register_standard_grad_layout(gray.weight)
+    
     return gray
 
 

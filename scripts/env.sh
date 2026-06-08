@@ -64,7 +64,8 @@ fi
 export SHMTU_WEIGHTS_DIR="${SHMTU_WEIGHTS_DIR:-$SHMTU_MODEL_DIR}"
 export SHMTU_NUM_GPUS="${SHMTU_NUM_GPUS:-8}"
 export SHMTU_PYTHON="${SHMTU_PYTHON:-python3}"
-export SHMTU_DYNAMO_BACKEND="${SHMTU_DYNAMO_BACKEND:-inductor}"
+# inductor or no
+export SHMTU_DYNAMO_BACKEND="${SHMTU_DYNAMO_BACKEND:-no}"
 
 # 仓库根 (lib shmtu-cas-python 路径)
 export SHMTU_REPO_ROOT="${SHMTU_REPO_ROOT:-$(cd "$SHMTU_MODEL_ROOT/../.." && pwd)}"
