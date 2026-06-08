@@ -2,6 +2,7 @@
 
 用于模型导出与格式转换:
 
+- `install_ncnn_tools.sh`: 下载官方预编译 `ncnn` 工具并为 `pnnx` / `ncnnoptimize` 加执行位
 - `export_onnx.sh`: `best.pt -> .onnx`
 - `export_torchscript.sh`: `best.pt -> traced .ts.pt`
 - `export_ncnn.sh`: `best.pt -> TorchScript -> pnnx -> .ncnn.param/.bin`
@@ -24,11 +25,13 @@ NCNNOPTIMIZE=/abs/path/to/ncnnoptimize
 ## 示例
 
 ```bash
+bash scripts/output/install_ncnn_tools.sh
+
+# 首次安装如果预编译包不含 pnnx，会自动下载 full-source 并编译 pnnx
+
 bash scripts/output/export_onnx.sh
 
-PNNX=/opt/ncnn/build/tools/pnnx/pnnx \
-NCNNOPTIMIZE=/opt/ncnn/build/tools/ncnnoptimize/ncnnoptimize \
-    bash scripts/output/export_ncnn.sh
+bash scripts/output/export_ncnn.sh
 
 bash scripts/output/export_all.sh
 ```

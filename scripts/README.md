@@ -28,6 +28,7 @@
 | `split.sh`                      | 物理分割 train/val/test + 写 manifest | `bash scripts/split.sh` |
 | `train.sh`                      | 8 卡 DDP 训练 (accelerate launch + fp16) | `bash scripts/train.sh` |
 | `export.sh`                     | best.pt → model.onnx (仅导出脚本使用 ONNX) | `bash scripts/export.sh` |
+| `output/install_ncnn_tools.sh`  | 下载 ncnn 预编译工具并准备 `pnnx` / `ncnnoptimize` | `bash scripts/output/install_ncnn_tools.sh` |
 | `output/export_onnx.sh`         | best.pt → model.onnx (稳定模式默认走 legacy exporter) | `bash scripts/output/export_onnx.sh` |
 | `output/export_torchscript.sh`  | best.pt → traced TorchScript | `bash scripts/output/export_torchscript.sh` |
 | `output/export_ncnn.sh`         | best.pt → TorchScript → pnnx → ncnn | `bash scripts/output/export_ncnn.sh` |
@@ -50,6 +51,7 @@ bash scripts/split.sh                       # 切 train/val/test
 # 2) 训练
 bash scripts/train.sh                       # 8 卡 DDP, fp16, 30 epoch
 bash scripts/export.sh                      # 导出 ONNX
+bash scripts/output/install_ncnn_tools.sh   # 下载 pnnx / ncnnoptimize
 bash scripts/output/export_all.sh           # 导出 ONNX + ncnn (pnnx)
 
 # 3) 评估 + benchmark

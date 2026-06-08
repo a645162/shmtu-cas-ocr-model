@@ -66,6 +66,7 @@ if ! PNNX_BIN_PATH="$(
     resolve_tool \
         PNNX \
         "$(command -v pnnx 2>/dev/null || true)" \
+        "$SHMTU_MODEL_ROOT/3rdparty/ncnn/bin/pnnx" \
         "${PNNX_HOME:-}/bin/pnnx" \
         "${PNNX_HOME:-}/build/tools/pnnx/pnnx" \
         "${NCNN_HOME:-}/bin/pnnx" \
@@ -77,6 +78,7 @@ fi
 if [ -z "$PNNX_BIN_PATH" ]; then
     echo "[export-ncnn] 未找到 pnnx."
     echo "[export-ncnn] 可通过环境变量 PNNX=/abs/path/to/pnnx 指定."
+    echo "[export-ncnn] 或先执行: bash scripts/output/install_ncnn_tools.sh"
     exit 1
 fi
 
@@ -101,6 +103,7 @@ if [ "$RUN_NCNNOPTIMIZE" = "1" ]; then
         resolve_tool \
             NCNNOPTIMIZE \
             "$(command -v ncnnoptimize 2>/dev/null || true)" \
+            "$SHMTU_MODEL_ROOT/3rdparty/ncnn/bin/ncnnoptimize" \
             "${NCNN_HOME:-}/bin/ncnnoptimize" \
             "${NCNN_HOME:-}/build/tools/ncnnoptimize/ncnnoptimize"
     )"; then
