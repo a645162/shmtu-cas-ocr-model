@@ -9,7 +9,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
 COUNT="${COUNT:-10_0000}"
-CHECKPOINT="${CHECKPOINT:-$SHMTU_RUN_DIR/best.pt}"
+CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
+if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
+    SHMTU_PROFILE_NAME="$(basename "${CONFIG%.*}")"
+    export SHMTU_PROFILE_NAME
+    export SHMTU_PROFILE_DIR="$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME"
+fi
+RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/run_path.sh" resolve)}"
+CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
 OUTPUT="${OUTPUT:-$SHMTU_DATASET_ROOT}"
 WEIGHTS_DIR="${WEIGHTS_DIR:-$SHMTU_WEIGHTS_DIR}"
 THROTTLE="${THROTTLE:-0.0}"

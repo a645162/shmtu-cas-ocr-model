@@ -4,9 +4,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/env.sh"
-CHECKPOINT="${CHECKPOINT:-$SHMTU_RUN_DIR/best.pt}"
+CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
+if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
+    SHMTU_PROFILE_NAME="$(basename "${CONFIG%.*}")"
+    export SHMTU_PROFILE_NAME
+    export SHMTU_PROFILE_DIR="$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME"
+fi
+RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/run_path.sh" resolve)}"
+CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
 BACKEND="${BACKEND:-pytorch}"
-REPORT="${REPORT:-$SHMTU_RUN_DIR/multi_gpu_report.json}"
+REPORT="${REPORT:-$RUN_DIR/multi_gpu_report.json}"
 LIMIT="${LIMIT:-}"
 if [ ! -f "$CHECKPOINT" ]; then
     echo "[bench-multi] checkpoint 不存在: $CHECKPOINT"

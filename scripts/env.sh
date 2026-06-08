@@ -12,7 +12,10 @@
 #   SHMTU_TCP_PORT          TCP  server bind port      (对齐 server_config.cpp, default 21601)
 #   SHMTU_MODEL_DIR         模型目录                   (对齐 server_config.cpp)
 #   SHMTU_DATASET_ROOT      数据集根目录
-#   SHMTU_RUN_DIR           训练输出目录
+#   SHMTU_RUNS_ROOT         runs 根目录
+#   SHMTU_PROFILE_NAME      profile 名称 (如 8gpu_ddp)
+#   SHMTU_RUN_DATE_TIME     训练输出目录名中的日期时间 (如 20260608_153000)
+#   SHMTU_RUN_DIR           显式指定某个具体 run 目录 (可选, 优先级最高)
 #   SHMTU_WEIGHTS_DIR       PyTorch 权重缓存
 #   SHMTU_NUM_GPUS          训练用 GPU 数
 #   SHMTU_PYTHON            Python 解释器
@@ -47,7 +50,15 @@ export SHMTU_MODEL_DIR="${SHMTU_MODEL_DIR:-$SHMTU_MODEL_ROOT/weights}"
 
 # ---- 路径 ----
 export SHMTU_DATASET_ROOT="${SHMTU_DATASET_ROOT:-$SHMTU_MODEL_ROOT/dataset}"
-export SHMTU_RUN_DIR="${SHMTU_RUN_DIR:-$SHMTU_MODEL_ROOT/runs/8gpu_ddp}"
+export SHMTU_RUNS_ROOT="${SHMTU_RUNS_ROOT:-$SHMTU_MODEL_ROOT/runs}"
+export SHMTU_PROFILE_NAME="${SHMTU_PROFILE_NAME:-${PROFILE_NAME:-}}"
+export SHMTU_RUN_DATE_TIME="${SHMTU_RUN_DATE_TIME:-${RUN_DATE_TIME:-}}"
+export SHMTU_RUN_DIR="${SHMTU_RUN_DIR:-${RUN_DIR:-}}"
+if [ -n "${SHMTU_PROFILE_NAME:-}" ]; then
+    export SHMTU_PROFILE_DIR="${SHMTU_PROFILE_DIR:-$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME}"
+else
+    export SHMTU_PROFILE_DIR="${SHMTU_PROFILE_DIR:-}"
+fi
 export SHMTU_WEIGHTS_DIR="${SHMTU_WEIGHTS_DIR:-$SHMTU_MODEL_DIR}"
 export SHMTU_NUM_GPUS="${SHMTU_NUM_GPUS:-8}"
 export SHMTU_PYTHON="${SHMTU_PYTHON:-python3}"
@@ -61,7 +72,10 @@ export SHMTU_BACKEND="${SHMTU_BACKEND:-restful}"
 
 echo "[env] SHMTU_MODEL_ROOT    = $SHMTU_MODEL_ROOT"
 echo "[env] SHMTU_DATASET_ROOT   = $SHMTU_DATASET_ROOT"
-echo "[env] SHMTU_RUN_DIR        = $SHMTU_RUN_DIR"
+echo "[env] SHMTU_RUNS_ROOT      = $SHMTU_RUNS_ROOT"
+echo "[env] SHMTU_PROFILE_NAME   = ${SHMTU_PROFILE_NAME:-<unset>}"
+echo "[env] SHMTU_PROFILE_DIR    = ${SHMTU_PROFILE_DIR:-<unset>}"
+echo "[env] SHMTU_RUN_DIR        = ${SHMTU_RUN_DIR:-<auto/latest>}"
 echo "[env] SHMTU_BACKEND        = $SHMTU_BACKEND"
 echo "[env] SHMTU_OCR_HTTP_URL   = $SHMTU_OCR_HTTP_URL"
 echo "[env] SHMTU_OCR_HOST:PORT  = $SHMTU_OCR_HOST:$SHMTU_OCR_PORT"

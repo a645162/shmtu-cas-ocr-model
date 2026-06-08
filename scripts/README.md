@@ -12,7 +12,9 @@
 | `CAS_OCR_RESTFUL_URL` | `http://127.0.0.1:21600` | RESTful OCR base url (对齐 shmtu-ocr-server HTTP 21600) |
 | `CAS_OCR_TCP_HOST` / `CAS_OCR_TCP_PORT` | `127.0.0.1` / `21601` | TCP OCR (对齐 shmtu-ocr-server TCP 21601) |
 | `CAS_OCR_DATASET_ROOT` | `$MODEL_ROOT/dataset` | 数据集根目录 (gitignore) |
-| `CAS_OCR_RUN_DIR` | `$MODEL_ROOT/runs/8gpu_ddp` | 训练输出目录 (gitignore) |
+| `SHMTU_RUNS_ROOT` | `$MODEL_ROOT/runs` | runs 根目录 (gitignore) |
+| `SHMTU_PROFILE_NAME` | `8gpu_ddp` | 当前实验 profile 名称 |
+| `SHMTU_RUN_DIR` | 空 | 显式指定某个具体 run 目录; 不设时默认解析 profile 下 `latest` |
 | `CAS_OCR_WEIGHTS_DIR` | `$MODEL_ROOT/weights` | PyTorch 权重缓存 (gitignore) |
 | `CAS_OCR_NUM_GPUS` | `8` | 训练 / 多卡 bench 用的 GPU 数 |
 | `CAS_OCR_PYTHON` | `python3` | Python 解释器 |
@@ -23,6 +25,7 @@
 | 脚本 | 职责 | 典型用法 |
 |---|---|---|
 | `env.sh`                        | 公共环境变量 | `source scripts/env.sh` |
+| `run_path.sh`                   | 创建 / 解析 `runs/{profile}/{date_time}` 与 `latest` | `bash scripts/run_path.sh resolve` |
 | `download_weights.sh`           | 仅下载 PyTorch 权重 (不采集) | `bash scripts/download_weights.sh` |
 | `collect.sh`                    | 启动 maker 采集 jpg+json | `bash scripts/collect.sh` |
 | `split.sh`                      | 物理分割 train/val/test + 写 manifest | `bash scripts/split.sh` |
@@ -49,7 +52,7 @@ bash scripts/collect.sh                     # 采集数据集 (默认 5000 张)
 bash scripts/split.sh                       # 切 train/val/test
 
 # 2) 训练
-bash scripts/train.sh                       # 8 卡 DDP, fp16, 30 epoch
+bash scripts/train.sh                       # 输出到 runs/{profile}/{YYYYMMDD_HHMMSS}, 并刷新 latest
 bash scripts/export.sh                      # 导出 ONNX
 bash scripts/output/install_ncnn_tools.sh   # 下载 pnnx / ncnnoptimize
 bash scripts/output/export_all.sh           # 导出 ONNX + ncnn (pnnx)
@@ -68,9 +71,17 @@ bash scripts/vis.sh                         # 可视化 test 集预测
 CAS_OCR_BACKEND=tcp COUNT=10000 PROCESSES=8 PER_PROCESS=4 \
     bash scripts/collect.sh
 
-# 例: 训练 4 卡 (单节点), 改输出目录
-CAS_OCR_NUM_GPUS=4 CAS_OCR_RUN_DIR=./runs/exp_4gpu \
+# 例: 训练 4 卡 (单节点), 改 profile 名称
+SHMTU_NUM_GPUS=4 SHMTU_PROFILE_NAME=exp_4gpu \
     bash scripts/train.sh
+
+# 例: 导出指定 profile 的 latest
+SHMTU_PROFILE_NAME=exp_4gpu \
+    bash scripts/output/export_all.sh
+
+# 例: 显式指定某个具体 run 目录
+SHMTU_RUN_DIR=./runs/exp_4gpu/20260608_153000 \
+    bash scripts/evaluate.sh
 
 # 例: 单卡速度 bench 用 CPU
 DEVICE=cpu NUM_SAMPLES=200 \
@@ -91,8 +102,8 @@ pip install -e ./Model/shmtu-cas-ocr-model
 bash scripts/vis.sh
 
 CONFIG=src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml \
-CHECKPOINT=./runs/8gpu_ddp/best.pt \
-OUTPUT_DIR=./output \
+SHMTU_RUN_DIR=./runs/8gpu_ddp/20260608_153000 \
+OUTPUT_DIR=./runs/8gpu_ddp/20260608_153000/outputs \
 N=20 \
 DEVICE=cuda \
     bash scripts/vis.sh
@@ -109,6 +120,7 @@ DEVICE=cuda \
 |---|---|
 | 采集 | `$CAS_OCR_DATASET_ROOT/` (默认 `./dataset/`) |
 | PyTorch 权重 | `$CAS_OCR_WEIGHTS_DIR/` (默认 `./weights/`) |
-| 训练输出 | `$CAS_OCR_RUN_DIR/` (默认 `./runs/8gpu_ddp/`) |
+| 训练输出 | `$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME/$date_time/` |
+| latest 指针 | `$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME/latest` (文件内容为相对路径) |
 
 详见 `Model/shmtu-cas-ocr-model/.gitignore`。

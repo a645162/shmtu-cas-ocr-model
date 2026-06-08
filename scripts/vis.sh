@@ -6,8 +6,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
 CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
-CHECKPOINT="${CHECKPOINT:-$SHMTU_RUN_DIR/best.pt}"
-OUTPUT_DIR="${OUTPUT_DIR:-$SHMTU_MODEL_ROOT/outputs}"
+if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
+    SHMTU_PROFILE_NAME="$(basename "${CONFIG%.*}")"
+    export SHMTU_PROFILE_NAME
+    export SHMTU_PROFILE_DIR="$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME"
+fi
+RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/run_path.sh" resolve)}"
+CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
+OUTPUT_DIR="${OUTPUT_DIR:-$RUN_DIR/outputs}"
 DEVICE="${DEVICE:-cuda}"
 N="${N:-20}"
 SEED="${SEED:-42}"
@@ -19,6 +25,7 @@ if [ ! -f "$CHECKPOINT" ]; then
 fi
 
 echo "[vis] config:     $CONFIG"
+echo "[vis] run dir:    $RUN_DIR"
 echo "[vis] checkpoint: $CHECKPOINT"
 echo "[vis] output:     $OUTPUT_DIR"
 echo "[vis] device:     $DEVICE"

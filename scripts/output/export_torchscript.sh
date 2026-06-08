@@ -5,8 +5,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../env.sh"
 
-CHECKPOINT="${CHECKPOINT:-$SHMTU_RUN_DIR/best.pt}"
-EXPORT_DIR="${EXPORT_DIR:-$SHMTU_RUN_DIR/export}"
+CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
+if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
+    SHMTU_PROFILE_NAME="$(basename "${CONFIG%.*}")"
+    export SHMTU_PROFILE_NAME
+    export SHMTU_PROFILE_DIR="$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME"
+fi
+RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../run_path.sh" resolve)}"
+CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
+EXPORT_DIR="${EXPORT_DIR:-$RUN_DIR/export}"
 MODEL_NAME="${MODEL_NAME:-$(basename "${CHECKPOINT%.*}")}"
 OUTPUT="${OUTPUT:-$EXPORT_DIR/$MODEL_NAME.ts.pt}"
 IMAGE_SIZE_H="${IMAGE_SIZE_H:-64}"

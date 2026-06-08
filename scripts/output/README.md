@@ -11,8 +11,10 @@
 ## 常用环境变量
 
 ```bash
-CHECKPOINT=./runs/8gpu_ddp/best.pt
-EXPORT_DIR=./runs/8gpu_ddp/export
+SHMTU_PROFILE_NAME=8gpu_ddp
+SHMTU_RUN_DIR=./runs/8gpu_ddp/20260608_153000
+CHECKPOINT=./runs/8gpu_ddp/20260608_153000/best.pt
+EXPORT_DIR=./runs/8gpu_ddp/20260608_153000/export
 MODEL_NAME=best
 IMAGE_SIZE_H=64
 IMAGE_SIZE_W=192
@@ -29,9 +31,12 @@ bash scripts/output/install_ncnn_tools.sh
 
 # 首次安装如果预编译包不含 pnnx，会自动下载 full-source 并编译 pnnx
 
+# 默认解析 runs/{profile}/latest
 bash scripts/output/export_onnx.sh
 
-bash scripts/output/export_ncnn.sh
+# 或显式指定某个 run
+SHMTU_RUN_DIR=./runs/8gpu_ddp/20260608_153000 \
+    bash scripts/output/export_ncnn.sh
 
 bash scripts/output/export_all.sh
 ```
