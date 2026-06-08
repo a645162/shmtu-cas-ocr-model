@@ -70,13 +70,15 @@ export PYTHONPATH="${PYTHONPATH:-}:$SHMTU_SRC:$SHMTU_REPO_ROOT/Lib/shmtu-cas-pyt
 # 采集阶段 OCR 后端选择 (restful | tcp | pytorch)
 export SHMTU_BACKEND="${SHMTU_BACKEND:-restful}"
 
-echo "[env] SHMTU_MODEL_ROOT    = $SHMTU_MODEL_ROOT"
-echo "[env] SHMTU_DATASET_ROOT   = $SHMTU_DATASET_ROOT"
-echo "[env] SHMTU_RUNS_ROOT      = $SHMTU_RUNS_ROOT"
-echo "[env] SHMTU_PROFILE_NAME   = ${SHMTU_PROFILE_NAME:-<unset>}"
-echo "[env] SHMTU_PROFILE_DIR    = ${SHMTU_PROFILE_DIR:-<unset>}"
-echo "[env] SHMTU_RUN_DIR        = ${SHMTU_RUN_DIR:-<auto/latest>}"
-echo "[env] SHMTU_BACKEND        = $SHMTU_BACKEND"
-echo "[env] SHMTU_OCR_HTTP_URL   = $SHMTU_OCR_HTTP_URL"
-echo "[env] SHMTU_OCR_HOST:PORT  = $SHMTU_OCR_HOST:$SHMTU_OCR_PORT"
-echo "[env] SHMTU_NUM_GPUS       = $SHMTU_NUM_GPUS"
+if [ "${SHMTU_ENV_SILENT:-0}" != "1" ]; then
+    echo "[env] SHMTU_MODEL_ROOT    = $SHMTU_MODEL_ROOT"
+    echo "[env] SHMTU_DATASET_ROOT   = $SHMTU_DATASET_ROOT"
+    echo "[env] SHMTU_RUNS_ROOT      = $SHMTU_RUNS_ROOT"
+    echo "[env] SHMTU_PROFILE_NAME   = ${SHMTU_PROFILE_NAME:-<unset>}"
+    echo "[env] SHMTU_PROFILE_DIR    = ${SHMTU_PROFILE_DIR:-<unset>}"
+    echo "[env] SHMTU_RUN_DIR        = ${SHMTU_RUN_DIR:-<auto/latest>}"
+    echo "[env] SHMTU_BACKEND        = $SHMTU_BACKEND"
+    echo "[env] SHMTU_OCR_HTTP_URL   = $SHMTU_OCR_HTTP_URL"
+    echo "[env] SHMTU_OCR_HOST:PORT  = $SHMTU_OCR_HOST:$SHMTU_OCR_PORT"
+    echo "[env] SHMTU_NUM_GPUS       = $SHMTU_NUM_GPUS"
+fi
