@@ -22,6 +22,37 @@ train_ratio = 0.9                                                # 无 manifest 
 num_workers = 4                                                  # 每进程 DataLoader worker 数
 pin_memory = true                                                # CUDA 推荐 true
 
+[data.augmentation]
+enabled = true                 # 训练集增强总开关
+
+translate_enabled = true       # 平移增强开关
+translate_prob = 0.7           # 小幅平移概率
+translate_x_px = 6             # 水平最大位移, 不裁切
+translate_y_px = 3             # 垂直最大位移, 不裁切
+
+affine_enabled = true          # 轻微仿射增强开关
+affine_prob = 0.4              # 轻微旋转/shear/缩放概率
+rotate_deg = 2.5               # 旋转幅度上限
+shear_deg = 4.0                # x 方向 shear 上限
+scale_min = 0.97               # 轻微缩小下限
+scale_max = 1.03               # 轻微放大上限
+
+morphology_enabled = true      # 腐蚀/膨胀增强开关
+morphology_prob = 0.15         # 腐蚀/膨胀概率
+morphology_kernel_size = 3     # 形态学核大小
+
+noise_enabled = true           # 稀疏噪点增强开关
+noise_prob = 0.10              # 稀疏噪点概率
+noise_density = 0.001          # 噪点密度, 建议 0.0005~0.002
+
+binarize_jitter_enabled = true # 训练期二值化扰动开关
+binarize_jitter_prob = 0.15    # 训练期二值化参数扰动概率
+threshold_jitter = 12          # fixed 模式阈值抖动
+adaptive_c_jitter = 3          # adaptive 模式 C 抖动
+alt_binarize_modes = ["min_channel_otsu", "gray_otsu"] # 可混入的训练期二值化模式
+
+rethreshold_after_aug = true   # 增强后压回纯二值图
+
 [model]
 backbone = "mobilenet_v3_small" # 可选: "mobilenet_v3_small" / "resnet18" / "resnet34"
 pretrained = true               # true=加载 ImageNet 预训练; false=随机初始化

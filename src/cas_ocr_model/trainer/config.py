@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -34,6 +34,48 @@ NUM_OPERATOR_CLASSES = len(OPERATOR_LABELS)  # 3
 # ----------------------------------------------------------------------------
 # 配置项
 # ----------------------------------------------------------------------------
+
+
+@dataclass
+class AugmentationConfig:
+    """训练集增强配置. 仅作用于训练 split."""
+
+    enabled: bool = False
+    """总开关."""
+
+    translate_enabled: bool = True
+    translate_prob: float = 0.7
+    translate_x_px: int = 6
+    translate_y_px: int = 3
+    """随机平移概率与最大像素位移."""
+
+    affine_enabled: bool = True
+    affine_prob: float = 0.4
+    rotate_deg: float = 2.5
+    shear_deg: float = 4.0
+    scale_min: float = 0.97
+    scale_max: float = 1.03
+    """轻微仿射增强参数."""
+
+    morphology_enabled: bool = True
+    morphology_prob: float = 0.15
+    morphology_kernel_size: int = 3
+    """二值图膨胀/腐蚀扰动."""
+
+    noise_enabled: bool = True
+    noise_prob: float = 0.10
+    noise_density: float = 0.001
+    """稀疏椒盐噪点密度."""
+
+    binarize_jitter_enabled: bool = False
+    binarize_jitter_prob: float = 0.0
+    threshold_jitter: int = 0
+    adaptive_c_jitter: int = 0
+    alt_binarize_modes: list[str] = field(default_factory=list)
+    """训练期可选二值化参数扰动."""
+
+    rethreshold_after_aug: bool = True
+    """增强后重新压回 0/255 二值图."""
 
 
 @dataclass
@@ -69,6 +111,9 @@ class DataConfig:
 
     pin_memory: bool = True
     """半精度传输加速."""
+
+    augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
+    """训练集专用增强配置."""
 
 
 @dataclass
@@ -232,6 +277,33 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--adaptive-c", type=int, default=None)
     p.add_argument("--train-ratio", type=float, default=None)
     p.add_argument("--num-workers", type=int, default=None)
+    p.add_argument("--aug-enabled", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
+    p.add_argument("--aug-translate-enabled", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
+    p.add_argument("--aug-translate-prob", type=float, default=None)
+    p.add_argument("--aug-translate-x-px", type=int, default=None)
+    p.add_argument("--aug-translate-y-px", type=int, default=None)
+    p.add_argument("--aug-affine-enabled", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
+    p.add_argument("--aug-affine-prob", type=float, default=None)
+    p.add_argument("--aug-rotate-deg", type=float, default=None)
+    p.add_argument("--aug-shear-deg", type=float, default=None)
+    p.add_argument("--aug-scale-min", type=float, default=None)
+    p.add_argument("--aug-scale-max", type=float, default=None)
+    p.add_argument("--aug-morphology-enabled", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
+    p.add_argument("--aug-morphology-prob", type=float, default=None)
+    p.add_argument("--aug-morphology-kernel-size", type=int, default=None)
+    p.add_argument("--aug-noise-enabled", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
+    p.add_argument("--aug-noise-prob", type=float, default=None)
+    p.add_argument("--aug-noise-density", type=float, default=None)
+    p.add_argument("--aug-binarize-jitter-enabled", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
+    p.add_argument("--aug-binarize-jitter-prob", type=float, default=None)
+    p.add_argument("--aug-threshold-jitter", type=int, default=None)
+    p.add_argument("--aug-adaptive-c-jitter", type=int, default=None)
+    p.add_argument(
+        "--aug-alt-binarize-modes",
+        type=lambda v: [s.strip() for s in v.split(",") if s.strip()],
+        default=None,
+    )
+    p.add_argument("--aug-rethreshold-after-aug", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
 
     # model
     p.add_argument("--backbone", type=str, default=None)
@@ -297,22 +369,65 @@ def merge_args_to_config(cfg: FullConfig, args: argparse.Namespace) -> FullConfi
                 setattr(sub, k, v)
                 break
 
+    nested_cli = {
+        "aug_enabled": ("data", "augmentation", "enabled"),
+        "aug_translate_enabled": ("data", "augmentation", "translate_enabled"),
+        "aug_translate_prob": ("data", "augmentation", "translate_prob"),
+        "aug_translate_x_px": ("data", "augmentation", "translate_x_px"),
+        "aug_translate_y_px": ("data", "augmentation", "translate_y_px"),
+        "aug_affine_enabled": ("data", "augmentation", "affine_enabled"),
+        "aug_affine_prob": ("data", "augmentation", "affine_prob"),
+        "aug_rotate_deg": ("data", "augmentation", "rotate_deg"),
+        "aug_shear_deg": ("data", "augmentation", "shear_deg"),
+        "aug_scale_min": ("data", "augmentation", "scale_min"),
+        "aug_scale_max": ("data", "augmentation", "scale_max"),
+        "aug_morphology_enabled": ("data", "augmentation", "morphology_enabled"),
+        "aug_morphology_prob": ("data", "augmentation", "morphology_prob"),
+        "aug_morphology_kernel_size": ("data", "augmentation", "morphology_kernel_size"),
+        "aug_noise_enabled": ("data", "augmentation", "noise_enabled"),
+        "aug_noise_prob": ("data", "augmentation", "noise_prob"),
+        "aug_noise_density": ("data", "augmentation", "noise_density"),
+        "aug_binarize_jitter_enabled": ("data", "augmentation", "binarize_jitter_enabled"),
+        "aug_binarize_jitter_prob": ("data", "augmentation", "binarize_jitter_prob"),
+        "aug_threshold_jitter": ("data", "augmentation", "threshold_jitter"),
+        "aug_adaptive_c_jitter": ("data", "augmentation", "adaptive_c_jitter"),
+        "aug_alt_binarize_modes": ("data", "augmentation", "alt_binarize_modes"),
+        "aug_rethreshold_after_aug": ("data", "augmentation", "rethreshold_after_aug"),
+    }
+    for arg_name, path in nested_cli.items():
+        if arg_name not in cli:
+            continue
+        obj = cfg
+        for attr in path[:-1]:
+            obj = getattr(obj, attr)
+        setattr(obj, path[-1], cli[arg_name])
+
     return cfg
+
+
+def _merge_dataclass(target: object, raw: dict) -> None:
+    if not isinstance(raw, dict):
+        return
+    field_names = {f.name for f in fields(target)}
+    for key, value in raw.items():
+        if key not in field_names:
+            continue
+        current = getattr(target, key)
+        if is_dataclass(current) and isinstance(value, dict):
+            _merge_dataclass(current, value)
+            continue
+        setattr(target, key, value)
 
 
 def _merge_raw_config(cfg: FullConfig, raw: dict) -> FullConfig:
     if "data" in raw:
-        for k, v in raw["data"].items():
-            setattr(cfg.data, k, v)
+        _merge_dataclass(cfg.data, raw["data"])
     if "model" in raw:
-        for k, v in raw["model"].items():
-            setattr(cfg.model, k, v)
+        _merge_dataclass(cfg.model, raw["model"])
     if "train" in raw:
-        for k, v in raw["train"].items():
-            setattr(cfg.train, k, v)
+        _merge_dataclass(cfg.train, raw["train"])
     if "loss" in raw:
-        for k, v in raw["loss"].items():
-            setattr(cfg.loss, k, v)
+        _merge_dataclass(cfg.loss, raw["loss"])
     return cfg
 
 

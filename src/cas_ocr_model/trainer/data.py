@@ -11,17 +11,20 @@ DDP 友好:
 from __future__ import annotations
 
 import json
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import cv2
 import torch
 from torch.utils.data import Dataset
 
 from cas_ocr_model.datasets.format import DatasetManifest, MANIFEST_FILENAME, scan_dataset
 from cas_ocr_model.common.expression import parse_captcha_expression
-from cas_ocr_model.common.preprocess import decode_color_image, preprocess_captcha_to_tensor
-from .config import DIGIT2IDX, OP2IDX
+from cas_ocr_model.common.preprocess import binarize_captcha, decode_color_image
+from .augment import augment_binary_image, sample_binarize_params
+from .config import AugmentationConfig, DIGIT2IDX, OP2IDX
 
 
 Split = Literal["train", "val", "test"]
@@ -109,6 +112,8 @@ class CaptchaPairDataset(Dataset):
         binarize_mode: str = "min_channel_otsu",
         adaptive_block_size: int = 25,
         adaptive_c: int = 15,
+        augmentation: AugmentationConfig | None = None,
+        enable_augmentation: bool = False,
         split: Split | None = None,
         train: bool = True,            # legacy
         train_ratio: float = 0.9,      # legacy
@@ -152,12 +157,15 @@ class CaptchaPairDataset(Dataset):
         self.binarize_mode = binarize_mode
         self.adaptive_block_size = adaptive_block_size
         self.adaptive_c = adaptive_c
+        self.augmentation = augmentation or AugmentationConfig()
+        self.enable_augmentation = enable_augmentation and self.augmentation.enabled
 
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, dict[str, int]]:
         s = self.samples[idx]
+        rng = random.Random(int(torch.randint(0, 2**31 - 1, (1,)).item()))
         img = _load_and_preprocess(
             s.image_path,
             self.image_size,
@@ -165,6 +173,9 @@ class CaptchaPairDataset(Dataset):
             self.binarize_mode,
             self.adaptive_block_size,
             self.adaptive_c,
+            self.augmentation,
+            self.enable_augmentation,
+            rng,
         )
         labels = {
             "digit_left": s.digit_left,
@@ -186,16 +197,37 @@ def _load_and_preprocess(
     binarize_mode: str,
     adaptive_block_size: int,
     adaptive_c: int,
+    augmentation: AugmentationConfig,
+    enable_augmentation: bool,
+    rng: random.Random,
 ) -> torch.Tensor:
     img = decode_color_image(path)
-    return preprocess_captcha_to_tensor(
+    if img is None:
+        return torch.zeros(1, image_size[0], image_size[1], dtype=torch.float32)
+
+    mode = binarize_mode
+    threshold_value = threshold
+    adaptive_c_value = adaptive_c
+    if enable_augmentation:
+        mode, threshold_value, adaptive_c_value = sample_binarize_params(
+            augmentation,
+            base_mode=binarize_mode,
+            base_threshold=threshold,
+            base_adaptive_c=adaptive_c,
+            rng=rng,
+        )
+
+    binary = binarize_captcha(
         img,
-        image_size=image_size,
-        threshold=threshold,
-        binarize_mode=binarize_mode,
+        threshold=threshold_value,
+        binarize_mode=mode,
         adaptive_block_size=adaptive_block_size,
-        adaptive_c=adaptive_c,
+        adaptive_c=adaptive_c_value,
     )
+    if enable_augmentation:
+        binary = augment_binary_image(binary, augmentation, rng)
+    resized = cv2.resize(binary, (image_size[1], image_size[0]), interpolation=cv2.INTER_NEAREST)
+    return torch.from_numpy(resized).float().unsqueeze(0) / 255.0
 
 
 # ----------------------------------------------------------------------------

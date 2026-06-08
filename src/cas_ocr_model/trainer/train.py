@@ -644,6 +644,8 @@ def main() -> None:
         binarize_mode=cfg.data.binarize_mode,
         adaptive_block_size=cfg.data.adaptive_block_size,
         adaptive_c=cfg.data.adaptive_c,
+        augmentation=cfg.data.augmentation,
+        enable_augmentation=True,
         split="train",
     )
     val_ds = CaptchaPairDataset(
