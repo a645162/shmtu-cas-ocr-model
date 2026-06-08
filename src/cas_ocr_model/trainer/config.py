@@ -1,8 +1,8 @@
-"""训练配置 — dataclass 形式, 兼容 YAML 反序列化.
+"""训练配置 — dataclass 形式, 兼容 YAML / TOML 反序列化.
 
 支持两种用法:
     1) 命令行参数 (train.py 入口) 直接覆盖
-    2) 加载 YAML 配置文件 (configs/*.yaml) 后用 CLI 覆盖
+    2) 加载 YAML/TOML 配置文件 (configs/*.{yaml,toml}) 后用 CLI 覆盖
 """
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ class ModelConfig:
     """模型结构配置."""
 
     backbone: str = "resnet18"
-    """backbone 名称 (当前支持 resnet18 / resnet34)."""
+    """backbone 名称 (当前支持 resnet18 / resnet34 / mobilenet_v3_small)."""
 
     pretrained: bool = True
     """是否加载 ImageNet 预训练权重. 验证码数据少, 强烈建议 True."""
@@ -175,7 +175,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     """解析 train.py 的命令行参数. 解析结果与 FullConfig 字段一一对应."""
     p = argparse.ArgumentParser(description="CAS CAPTCHA 3-head DDP 训练 (accelerate)")
     p.add_argument("--config", type=str, default=None,
-                   help="可选 YAML 配置文件路径, 提供各 Config 的初始值")
+                   help="可选 YAML/TOML 配置文件路径, 提供各 Config 的初始值")
 
     # data
     p.add_argument("--data-root", type=str, default=None)
@@ -232,11 +232,24 @@ def merge_args_to_config(cfg: FullConfig, args: argparse.Namespace) -> FullConfi
     return cfg
 
 
-def load_from_yaml(path: str) -> FullConfig:
-    """从 YAML 加载 (PyYAML). 字段名与 datacass 字段严格一致.
+def _merge_raw_config(cfg: FullConfig, raw: dict) -> FullConfig:
+    if "data" in raw:
+        for k, v in raw["data"].items():
+            setattr(cfg.data, k, v)
+    if "model" in raw:
+        for k, v in raw["model"].items():
+            setattr(cfg.model, k, v)
+    if "train" in raw:
+        for k, v in raw["train"].items():
+            setattr(cfg.train, k, v)
+    if "loss" in raw:
+        for k, v in raw["loss"].items():
+            setattr(cfg.loss, k, v)
+    return cfg
 
-    缺依赖时给清晰报错, 而不是裸 ImportError.
-    """
+
+def load_from_yaml(path: str) -> FullConfig:
+    """从 YAML 加载. 字段名与 dataclass 字段严格一致."""
     try:
         import yaml
     except ImportError as e:
@@ -251,19 +264,39 @@ def load_from_yaml(path: str) -> FullConfig:
         raw = yaml.safe_load(fh) or {}
 
     cfg = FullConfig()
-    if "data" in raw:
-        for k, v in raw["data"].items():
-            setattr(cfg.data, k, v)
-    if "model" in raw:
-        for k, v in raw["model"].items():
-            setattr(cfg.model, k, v)
-    if "train" in raw:
-        for k, v in raw["train"].items():
-            setattr(cfg.train, k, v)
-    if "loss" in raw:
-        for k, v in raw["loss"].items():
-            setattr(cfg.loss, k, v)
-    return cfg
+    return _merge_raw_config(cfg, raw)
+
+
+def load_from_toml(path: str) -> FullConfig:
+    """从 TOML 加载. 字段名与 dataclass 字段严格一致."""
+    try:
+        import tomllib  # py311+
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # py39/py310 fallback
+        except ImportError as e:
+            raise RuntimeError(
+                "加载 TOML 配置需要 Python 3.11+ 或安装 tomli: pip install tomli"
+            ) from e
+
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(f"config file not found: {p}")
+    with p.open("rb") as fh:
+        raw = tomllib.load(fh) or {}
+
+    cfg = FullConfig()
+    return _merge_raw_config(cfg, raw)
+
+
+def load_config(path: str) -> FullConfig:
+    """按文件后缀自动加载 YAML / TOML 配置."""
+    suffix = Path(path).suffix.lower()
+    if suffix in (".yaml", ".yml"):
+        return load_from_yaml(path)
+    if suffix == ".toml":
+        return load_from_toml(path)
+    raise ValueError(f"unsupported config format: {path} (expected .yaml/.yml/.toml)")
 
 
 def cfg_to_dict(cfg: FullConfig) -> dict:

@@ -11,7 +11,7 @@
    torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \\
        --data-root ../../../../dataset --output-dir ./runs/exp1
 
-3) YAML 配置 + CLI 覆盖:
+3) YAML/TOML 配置 + CLI 覆盖:
    accelerate launch --num_processes 8 --mixed_precision fp16 \\
        -m cas_ocr_model.trainer.train --config configs/8gpu_ddp.yaml
 
@@ -44,7 +44,7 @@ from .config import (
     NUM_OPERATOR_CLASSES,
     cfg_to_dict,
     ensure_output_dir,
-    load_from_yaml,
+    load_config,
     merge_args_to_config,
     parse_args,
 )
@@ -140,7 +140,7 @@ def main() -> None:
     args = parse_args()
 
     # 1) 配置组装
-    cfg = load_from_yaml(args.config) if args.config else FullConfig()
+    cfg = load_config(args.config) if args.config else FullConfig()
     cfg = merge_args_to_config(cfg, args)
 
     # 2) accelerate 初始化 (DDP/混合精度/进程管理统一交给它)

@@ -14,7 +14,7 @@
 
 ```
 trainer/
-├── config.py     # 配置 dataclass + CLI + YAML 加载
+├── config.py     # 配置 dataclass + CLI + YAML/TOML 加载
 ├── model.py      # CaptchaTripleHeadCNN (ResNet-18/34 + 3 头)
 ├── data.py       # CaptchaPairDataset: 扫描 jpg+json, 灰度+二值化
 ├── losses.py     # 3-head 联合 CE + 准确率
@@ -63,7 +63,12 @@ accelerate launch --num_processes 8 --mixed_precision fp16 \
 torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml
 
-# 或完全 CLI (不走 YAML)
+# 或 TOML 配置
+accelerate launch --num_processes 8 --mixed_precision fp16 \
+    -m cas_ocr_model.trainer.train \
+    --config src/cas_ocr_model/trainer/configs/mobile_small.toml
+
+# 或完全 CLI (不走配置文件)
 torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
     --data-root /path/to/dataset --output-dir ./runs/exp1 \
     --epochs 30 --per-device-batch-size 256 --learning-rate 8e-3 \

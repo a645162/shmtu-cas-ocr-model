@@ -1,6 +1,7 @@
-"""Backbone 工厂: 把 torchvision ResNet 改造成"接收 1-通道灰度图".
+"""Backbone 工厂: 把 torchvision backbone 改造成"接收 1-通道灰度图".
 
-当前实现: ResNet-18 / ResNet-34. 输出保留空间特征图, 便于后续按宽度做槽位解码.
+当前实现: ResNet-18 / ResNet-34 / MobileNetV3-Small.
+输出保留空间特征图, 便于后续按宽度做槽位解码.
 
 设计原则:
     * backbone 输出固定维度 (B, feat_dim, H', W') 的空间特征图
@@ -60,6 +61,15 @@ def _spatialize_resnet(net: nn.Module) -> Tuple[nn.Module, int]:
     return features, feat_dim
 
 
+def _spatialize_mobilenet_v3_small(net: nn.Module) -> Tuple[nn.Module, int]:
+    first_conv = net.features[0][0]
+    if not isinstance(first_conv, nn.Conv2d):
+        raise TypeError("unexpected MobileNetV3-Small stem layout")
+    net.features[0][0] = _to_grayscale_conv(first_conv)
+    feat_dim = net.classifier[0].in_features
+    return net.features, feat_dim
+
+
 @_register("resnet18")
 def _resnet18(pretrained: bool) -> Tuple[nn.Module, int]:
     net = models.resnet18(
@@ -74,6 +84,14 @@ def _resnet34(pretrained: bool) -> Tuple[nn.Module, int]:
         weights=models.ResNet34_Weights.IMAGENET1K_V1 if pretrained else None
     )
     return _spatialize_resnet(net)
+
+
+@_register("mobilenet_v3_small")
+def _mobilenet_v3_small(pretrained: bool) -> Tuple[nn.Module, int]:
+    net = models.mobilenet_v3_small(
+        weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1 if pretrained else None
+    )
+    return _spatialize_mobilenet_v3_small(net)
 
 
 # 未来可加:
@@ -95,7 +113,8 @@ def build_resnet_backbone(
     """按名称构造 backbone.
 
     Args:
-        name: ``"resnet18"`` / ``"resnet34"`` (见 list_available_backbones)
+        name: ``"resnet18"`` / ``"resnet34"`` / ``"mobilenet_v3_small"``
+            (见 list_available_backbones)
         pretrained: 是否加载 ImageNet 预训练权重
 
     Returns:
@@ -109,4 +128,4 @@ def build_resnet_backbone(
 
 
 def list_available_backbones() -> list[str]:
-    return list(_BACKBONE_REGISTRY.keys())
+    return sorted(_BACKBONE_REGISTRY.keys())

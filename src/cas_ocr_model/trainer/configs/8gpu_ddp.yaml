@@ -1,38 +1,68 @@
 # 8 卡 DDP 训练配置 (CASINO CAPTCHA 3-head)
 # 配合: accelerate launch --num_processes 8 --mixed_precision fp16 \
 #       -m cas_ocr_model.trainer.train --config configs/8gpu_ddp.yaml
+#
+# model.backbone 可选值:
+#   - mobilenet_v3_small  # 推荐轻量化首选
+#   - resnet18            # 默认基线
+#   - resnet34            # 更大更慢, 通常不适合轻量化
+#
+# model.pretrained:
+#   - true  # 推荐, 加载 ImageNet 预训练权重
+#   - false # 从头训练
+#
+# train.mixed_precision 可选值:
+#   - fp16
+#   - bf16
+#   - no
+#
+# data.binarize_mode 可选值:
+#   - min_channel_otsu
+#   - gray_otsu
+#   - adaptive
+#   - fixed
 
 data:
-  data_root: /home/konghaomin/Prj/SHMTU/shmtu-terminal/dataset
-  image_size_h: 64
-  image_size_w: 192
-  threshold: 200
-  train_ratio: 0.9
-  num_workers: 4
-  pin_memory: true
+  # data_root: /home/konghaomin/Prj/SHMTU/shmtu-terminal/dataset   # 数据集根目录
+  data_root: /home/konghaomin/Prj/SHMTU/shmtu-terminal/Model/shmtu-cas-ocr-model/dataset
+  image_size_h: 64                                                # 输入高度, 可尝试 48 / 64
+  image_size_w: 192                                               # 输入宽度, 可尝试 128 / 160 / 192
+  threshold: 200                                                  # fixed 模式阈值
+  binarize_mode: min_channel_otsu                                 # 推荐默认模式
+  adaptive_block_size: 25                                         # adaptive 模式邻域大小, 必须奇数
+  adaptive_c: 15                                                  # adaptive 模式阈值偏移
+  train_ratio: 0.9                                                # 无 manifest 时使用
+  num_workers: 4                                                  # 每进程 DataLoader worker 数
+  pin_memory: true                                                # CUDA 推荐 true
 
 model:
-  backbone: resnet18   # 或 resnet34
-  pretrained: true
-  dropout: 0.2
+  backbone: mobilenet_v3_small             # 可选: mobilenet_v3_small / resnet18 / resnet34
+  pretrained: true               # true=加载 ImageNet 预训练; false=随机初始化
+  dropout: 0.2                   # head dropout, 可尝试 0.0 ~ 0.3
+  slot_hidden_dim: 256           # head 隐层维度, 可尝试 128 / 256
+  slot_attention_heads: 4        # 注意力头数; 需整除 slot_hidden_dim, 可尝试 2 / 4 / 8
 
 train:
-  output_dir: ./runs/8gpu_ddp
-  seed: 42
-  epochs: 30
+  output_dir: ./runs/8gpu_ddp    # checkpoint / 日志输出目录
+  seed: 42                       # 随机种子
+  epochs: 30                     # 总 epoch 数
   per_device_batch_size: 256       # 8 卡 x 256 = 2048 effective
   learning_rate: 8.0e-3            # 1e-3 * 8 (线性缩放规则)
-  weight_decay: 1.0e-4
-  warmup_ratio: 0.05
-  grad_clip: 1.0
-  log_every_n_steps: 20
-  save_every_n_epochs: 1
+  weight_decay: 1.0e-4             # AdamW weight decay
+  warmup_ratio: 0.05               # warmup 占总步数比例
+  grad_clip: 1.0                   # 梯度裁剪阈值
+  log_every_n_steps: 20            # 日志打印间隔
+  save_every_n_epochs: 1           # checkpoint 保存间隔
   mixed_precision: fp16            # 与用户偏好对齐 (A100/H100/RTX40 也都支持)
-  gradient_accumulation_steps: 1
-  # resume_from: null
+  gradient_accumulation_steps: 1   # 梯度累积步数
+  # resume_from: ./runs/8gpu_ddp/last.pt   # 可选: 断点续训路径
 
 loss:
-  weight_digit_left: 1.0
-  weight_operator: 1.0
-  weight_digit_right: 1.0
-  label_smoothing: 0.05
+  weight_digit_left: 1.0           # 左数字分类损失权重
+  weight_operator: 1.0             # 运算符分类损失权重
+  weight_digit_right: 1.0          # 右数字分类损失权重
+  label_smoothing: 0.05            # 建议 0.0 ~ 0.1
+  focal_gamma: 0.0                 # 关闭 focal; 难样本多时可试 1.0 / 2.0
+  weight_slot_order: 0.1           # 槽位顺序约束权重
+  weight_slot_overlap: 0.05        # 槽位重叠惩罚权重
+  slot_margin: 0.10                # 槽位中心最小间距

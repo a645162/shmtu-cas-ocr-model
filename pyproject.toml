@@ -25,6 +25,7 @@ dependencies = [
     "tqdm",
     "rich>=13.0",
     "matplotlib",
+    "tomli; python_version < '3.11'",
 ]
 
 [tool.setuptools.packages.find]

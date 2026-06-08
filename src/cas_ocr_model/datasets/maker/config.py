@@ -64,7 +64,7 @@ def download_file(url: str, dest: Path) -> None:
 
 
 def ensure_pytorch_weights(weights_dir: Path) -> dict[str, Path]:
-    """下载并校验 PyTorch 权重. 返回 {label: path} 字典."""
+    """下载并校验 PyTorch v1 权重. 返回 {label: path} 字典."""
     weights_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, Path] = {}
     for label, url in WEIGHT_FILES.items():
@@ -75,54 +75,19 @@ def ensure_pytorch_weights(weights_dir: Path) -> dict[str, Path]:
 
 
 def format_eta(seconds: float) -> str:
-    """把秒数格式化成自适应单位, 避免 "1000m" / "116h4m" 这种难读数字.
-
-    进位规则 (按数值从大到小归整, 永不并列显示两个单位):
-        < 0  或 NaN    -> "?" (未知, 速率 <= 0 时调用方传入)
-        < 60s          -> "42s"
-        < 60m (1h)     -> "11m"       整分钟, 不显示秒
-        < 24h          -> "1h" / "5h" / "23h"  整小时, 超过 60 分钟不显示 "XhYm"
-        >= 24h         -> "1d" / "7d" / "30d"  整天数, 不再嵌套小时
-
-    例子:
-        >>> format_eta(0)
-        '0s'
-        >>> format_eta(42)
-        '42s'
-        >>> format_eta(60)
-        '1m'
-        >>> format_eta(3599)
-        '59m'
-        >>> format_eta(3600)
-        '1h'
-        >>> format_eta(5400)         # 1.5h -> 升级为小时, 不显示 30m
-        '1h'
-        >>> format_eta(7200)         # 2h
-        '2h'
-        >>> format_eta(86400)        # 1 天
-        '1d'
-        >>> format_eta(7 * 24 * 3600)
-        '7d'
-    """
-    if seconds < 0 or seconds != seconds:  # NaN 防御
+    if seconds < 0 or seconds != seconds:
         return "?"
     s = int(seconds)
     if s < 60:
         return f"{s}s"
-    if s < 3600:               # < 1h: 用分钟
+    if s < 3600:
         return f"{s // 60}m"
-    if s < 86400:              # < 24h: 用小时, 不显示分钟
+    if s < 86400:
         return f"{s // 3600}h"
-    return f"{s // 86400}d"    # >= 24h: 用天, 不显示小时/分钟
+    return f"{s // 86400}d"
 
 
 def scan_existing_max_index(output_dir: Path) -> int:
-    """扫描已有 8 位编号 jpg, 返回最大编号; 无则返回 -1.
-
-    用于断点续采: 下一个可用序号 = scan_existing_max_index(dir) + 1.
-    只识别 8 位数字 stem (与 cas_client.collect_one 的 f"{idx:08d}" 保持一致),
-    忽略 .tmp / 其它扩展 / 非数字文件名, 永不抛异常.
-    """
     max_idx = -1
     if not output_dir.exists():
         return max_idx
@@ -136,11 +101,27 @@ def scan_existing_max_index(output_dir: Path) -> int:
     return max_idx
 
 
+def add_backend_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--backend", choices=["restful", "tcp", "pytorch"], default="restful")
+    p.add_argument("--ocr-url", default="http://127.0.0.1:21600",
+                   help="RESTful OCR base url (对齐 shmtu-ocr-server HTTP 默认端口 21600)")
+    p.add_argument("--ocr-timeout", type=float, default=10.0)
+    p.add_argument("--ocr-host", default="127.0.0.1")
+    p.add_argument("--ocr-port", type=int, default=21601,
+                   help="对齐 shmtu-ocr-server TCP 默认端口 21601")
+    p.add_argument("--weights-dir", default="./weights",
+                   help="PyTorch v1 权重缓存目录 (自动从 GitHub release 下载)")
+    p.add_argument("--model-name", choices=["pytorch_v1", "pytorch_v2"], default="pytorch_v1",
+                   help="本地 PyTorch 模型名称")
+    p.add_argument("--checkpoint", default=None,
+                   help="新版 triple-head checkpoint (best.pt)")
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="上海海事大学 CAS 验证码数据集采集器 (多进程 + 多会话)"
     )
-    p.add_argument("--backend", choices=["restful", "tcp", "pytorch"], default="restful")
+    add_backend_args(p)
     p.add_argument("--output", default="./dataset", help="输出目录 (含 .jpg + .json)")
     p.add_argument("--count", type=int, default=1000, help="目标成功保存数量 (在已有基础上累加)")
     p.add_argument("--processes", type=int, default=4, help="进程数")
@@ -153,16 +134,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="显式声明续采模式 (默认行为): 从 --output 已有最大编号 + 1 继续, 不覆盖; "
         "不传此 flag 行为一致, 传了仅在日志中显式标记 'explicit resume' 便于审计.",
     )
+    return p
 
-    p.add_argument("--ocr-url", default="http://127.0.0.1:21600",
-                   help="RESTful OCR base url (对齐 shmtu-ocr-server HTTP 默认端口 21600)")
-    p.add_argument("--ocr-timeout", type=float, default=10.0)
 
-    p.add_argument("--ocr-host", default="127.0.0.1")
-    p.add_argument("--ocr-port", type=int, default=21601,
-                   help="对齐 shmtu-ocr-server TCP 默认端口 21601")
-
-    p.add_argument("--weights-dir", default="./weights",
-                   help="PyTorch 权重缓存目录 (自动从 GitHub release 下载)")
-
+def build_eval_arg_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="CAS OCR 正确率评估脚本")
+    add_backend_args(p)
+    p.add_argument("--count", type=int, default=200, help="评估样本数")
+    p.add_argument("--concurrency", type=int, default=4, help="并发会话数")
+    p.add_argument("--throttle", type=float, default=0.0, help="每次验证后睡眠秒")
+    p.add_argument("--json-output", default=None, help="可选 JSON 结果输出路径")
     return p

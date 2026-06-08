@@ -4,7 +4,7 @@
 未来可加入更复杂的 (注意力 / Transformer / 多尺度融合) 而不影响训练入口.
 
 模块:
-    backbones                         - backbone 工厂 (ResNet-18/34 1-通道)
+    backbones                         - backbone 工厂 (ResNet-18/34/MobileNetV3-Small 1-通道)
     heads                             - 3-head 分类器容器
     captcha_triple_head_cnn           - 当前模型: backbone + 3-head, 一次前向 3 logits
 

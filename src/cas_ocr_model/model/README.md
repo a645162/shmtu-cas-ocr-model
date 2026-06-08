@@ -1,12 +1,12 @@
 # 模型子包
 
-存放所有验证码识别模型。当前是简单版 (`CaptchaTripleHeadCNN` = ResNet-18/34 + 3 独立 head), 未来会加入更复杂的实现而不影响训练入口。
+存放所有验证码识别模型。当前是简单版 (`CaptchaTripleHeadCNN` = ResNet-18/34/MobileNetV3-Small + 3 独立 head), 未来会加入更复杂的实现而不影响训练入口。
 
 ## 文件职责
 
 | 文件 | 职责 |
 |---|---|
-| `backbones.py`        | backbone 工厂: `build_resnet_backbone(name, pretrained)`. 当前支持 `resnet18` / `resnet34`, 都已改成接收 1 通道灰度图 |
+| `backbones.py`        | backbone 工厂: `build_resnet_backbone(name, pretrained)`. 当前支持 `resnet18` / `resnet34` / `mobilenet_v3_small`, 都已改成接收 1 通道灰度图 |
 | `heads.py`            | `TripleHead` 容器: 共享特征向量 → 3 个独立分类头 (digit_left / operator / digit_right) |
 | `captcha_triple_head_cnn.py` | 当前主模型: backbone + TripleHead, 一次前向输出 3 个 logits |
 | `__init__.py`         | 公共 API re-export |

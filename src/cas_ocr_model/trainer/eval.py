@@ -18,7 +18,7 @@ from accelerate.utils import set_seed
 
 from .config import (
     FullConfig,
-    load_from_yaml,
+    load_config,
 )
 from .data import CaptchaPairDataset, collate_triple
 from .losses import LossWeights, TripleHeadLoss
@@ -36,7 +36,7 @@ def main() -> None:
     p.add_argument("--mixed-precision", type=str, default="fp16")
     args = p.parse_args()
 
-    cfg = load_from_yaml(args.config) if args.config else FullConfig()
+    cfg = load_config(args.config) if args.config else FullConfig()
     cfg.train.per_device_batch_size = args.per_device_batch_size
     cfg.data.num_workers = args.num_workers
     if args.data_root:
