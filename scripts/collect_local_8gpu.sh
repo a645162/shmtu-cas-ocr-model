@@ -2,6 +2,8 @@
 # 8 卡本地模型采集: 每卡 1 进程, 本地推理后提交 CAS 验证
 set -euo pipefail
 
+export NVI_NOTIFY_IGNORE_TASK=1
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/env.sh"

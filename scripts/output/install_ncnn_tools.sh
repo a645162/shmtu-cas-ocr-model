@@ -5,17 +5,36 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../env.sh"
 
-if ! command -v unzip >/dev/null 2>&1; then
-    echo "[install-ncnn] 需要 unzip, 请先安装系统包."
-    exit 1
-fi
+require_cmd() {
+    local cmd="$1"
+    local hint="${2:-}"
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return 0
+    fi
 
-if command -v curl >/dev/null 2>&1; then
-    DOWNLOADER="curl"
-elif command -v wget >/dev/null 2>&1; then
-    DOWNLOADER="wget"
-else
-    echo "[install-ncnn] 需要 curl 或 wget."
+    if [ -n "$hint" ]; then
+        echo "[install-ncnn] 缺少依赖: $cmd ($hint)"
+    else
+        echo "[install-ncnn] 缺少依赖: $cmd"
+    fi
+    exit 1
+}
+
+require_cmd unzip "请先安装系统包"
+
+DOWNLOADER="${DOWNLOADER:-}"
+if [ -z "$DOWNLOADER" ]; then
+    if command -v curl >/dev/null 2>&1; then
+        DOWNLOADER="curl"
+    elif command -v wget >/dev/null 2>&1; then
+        DOWNLOADER="wget"
+    else
+        echo "[install-ncnn] 需要 curl 或 wget."
+        exit 1
+    fi
+fi
+if [ "$DOWNLOADER" != "curl" ] && [ "$DOWNLOADER" != "wget" ]; then
+    echo "[install-ncnn] DOWNLOADER 仅支持 curl 或 wget，当前值: $DOWNLOADER"
     exit 1
 fi
 
@@ -24,6 +43,9 @@ RELEASE_API="${RELEASE_API:-https://api.github.com/repos/Tencent/ncnn/releases/l
 FORCE_CLEAN="${FORCE_CLEAN:-0}"
 BUILD_PNNX_IF_MISSING="${BUILD_PNNX_IF_MISSING:-1}"
 BUILD_JOBS="${BUILD_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
+PYTHON_BIN="${PYTHON_BIN:-${SHMTU_PYTHON:-python3}}"
+ASSET_URL="${ASSET_URL:-}"
+ASSET_REGEX="${ASSET_REGEX:-}"
 
 OS_NAME="$(uname -s)"
 ARCH_NAME="$(uname -m)"
@@ -31,16 +53,29 @@ ARCH_NAME="$(uname -m)"
 asset_selector() {
     case "$OS_NAME:$ARCH_NAME" in
         Linux:x86_64)
-            echo "ubuntu.*\\.zip$"
+            cat <<'EOF'
+ubuntu-2204\.zip$
+ubuntu-2404\.zip$
+ubuntu-2204-shared\.zip$
+ubuntu-2404-shared\.zip$
+EOF
             ;;
         Linux:aarch64|Linux:arm64)
-            echo "(ubuntu|linux).*(aarch64|arm64).*\\.zip$"
+            cat <<'EOF'
+(ubuntu|linux).*(aarch64|arm64).*\.zip$
+EOF
             ;;
         Darwin:x86_64)
-            echo "macos.*\\.zip$"
+            cat <<'EOF'
+macos\.zip$
+macos-vulkan\.zip$
+EOF
             ;;
         Darwin:arm64)
-            echo "macos.*(arm64|apple).*\\.zip$"
+            cat <<'EOF'
+macos.*(arm64|apple).*\.zip$
+macos\.zip$
+EOF
             ;;
         *)
             return 1
@@ -48,32 +83,51 @@ asset_selector() {
     esac
 }
 
-if ! ASSET_REGEX="$(asset_selector)"; then
-    echo "[install-ncnn] 暂不支持自动匹配平台: $OS_NAME $ARCH_NAME"
-    echo "[install-ncnn] 请手动下载后设置 PNNX/NCNNOPTIMIZE."
-    exit 1
+if [ -z "$ASSET_URL" ]; then
+    if [ -z "$ASSET_REGEX" ]; then
+        if ! ASSET_REGEX="$(asset_selector)"; then
+            echo "[install-ncnn] 暂不支持自动匹配平台: $OS_NAME $ARCH_NAME"
+            echo "[install-ncnn] 请手动下载后设置 ASSET_URL 或手动提供 PNNX/NCNNOPTIMIZE."
+            exit 1
+        fi
+    fi
 fi
 
 get_asset_url() {
-    local regex="$1"
-    RELEASE_JSON="$RELEASE_JSON" ASSET_REGEX="$regex" python - <<'PY'
+    local patterns="$1"
+    RELEASE_JSON="$RELEASE_JSON" ASSET_PATTERNS="$patterns" "$PYTHON_BIN" - <<'PY'
 import json
 import os
 import re
 import sys
 
 path = os.environ["RELEASE_JSON"]
-pattern = re.compile(os.environ["ASSET_REGEX"], re.IGNORECASE)
+patterns = [line.strip() for line in os.environ["ASSET_PATTERNS"].splitlines() if line.strip()]
 
 with open(path, "r", encoding="utf-8") as f:
-    data = json.load(f)
+    try:
+        data = json.load(f)
+    except json.JSONDecodeError as exc:
+        print(f"[install-ncnn] release api 返回的不是有效 JSON: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+if isinstance(data, dict) and "assets" not in data:
+    message = data.get("message")
+    if message:
+        print(f"[install-ncnn] release api 返回异常: {message}", file=sys.stderr)
+    else:
+        print("[install-ncnn] release api 返回中缺少 assets 字段.", file=sys.stderr)
+    sys.exit(2)
 
 assets = data.get("assets", [])
-for asset in assets:
-    name = asset.get("name", "")
-    if pattern.search(name):
-        print(asset.get("browser_download_url", ""))
-        sys.exit(0)
+for pattern_text in patterns:
+    pattern = re.compile(pattern_text, re.IGNORECASE)
+    for asset in assets:
+        name = asset.get("name", "")
+        url = asset.get("browser_download_url", "")
+        if url and pattern.search(name):
+            print(url)
+            sys.exit(0)
 
 sys.exit(1)
 PY
@@ -99,6 +153,17 @@ download_to() {
     fi
 }
 
+print_installed_tools() {
+    local tool=""
+    for tool in pnnx ncnnoptimize; do
+        if [ -x "$INSTALL_DIR/bin/$tool" ]; then
+            ls -l "$INSTALL_DIR/bin/$tool"
+        fi
+    done
+}
+
+require_cmd "$PYTHON_BIN" "用于解析 GitHub release JSON"
+
 if [ "$FORCE_CLEAN" = "1" ] && [ -d "$INSTALL_DIR" ]; then
     rm -rf "$INSTALL_DIR"
 fi
@@ -117,12 +182,18 @@ echo "[install-ncnn] release api = $RELEASE_API"
 echo "[install-ncnn] install dir = $INSTALL_DIR"
 echo "[install-ncnn] platform    = $OS_NAME $ARCH_NAME"
 
-download_to "$RELEASE_API" "$RELEASE_JSON"
+if [ -z "$ASSET_URL" ]; then
+    download_to "$RELEASE_API" "$RELEASE_JSON"
 
-ASSET_URL="$(get_asset_url "$ASSET_REGEX" || true)"
+    ASSET_URL="$(get_asset_url "$ASSET_REGEX" || true)"
+fi
 
 if [ -z "$ASSET_URL" ]; then
     echo "[install-ncnn] 未找到匹配当前平台的 ncnn 发行包."
+    if [ -n "$ASSET_REGEX" ]; then
+        echo "[install-ncnn] 当前匹配规则:"
+        printf '%s\n' "$ASSET_REGEX" | sed 's/^/  - /'
+    fi
     exit 1
 fi
 
@@ -150,6 +221,8 @@ for tool in "$INSTALL_DIR/bin/pnnx" "$INSTALL_DIR/bin/ncnnoptimize"; do
 done
 
 if [ "$BUILD_PNNX_IF_MISSING" = "1" ] && [ ! -f "$INSTALL_DIR/bin/pnnx" ]; then
+    require_cmd cmake "BUILD_PNNX_IF_MISSING=1 时需要 cmake"
+
     SOURCE_URL="$(get_asset_url 'full-source\\.zip$' || true)"
     if [ -z "$SOURCE_URL" ]; then
         echo "[install-ncnn] 未找到 full-source 发行包，无法自动构建 pnnx."
@@ -190,5 +263,11 @@ if [ "$BUILD_PNNX_IF_MISSING" = "1" ] && [ ! -f "$INSTALL_DIR/bin/pnnx" ]; then
     fi
 fi
 
+if [ ! -x "$INSTALL_DIR/bin/pnnx" ]; then
+    echo "[install-ncnn] 安装后仍未找到可执行 pnnx: $INSTALL_DIR/bin/pnnx"
+    echo "[install-ncnn] 可显式设置 ASSET_URL，或手动构建后通过 PNNX=/abs/path/to/pnnx 使用."
+    exit 1
+fi
+
 echo "[install-ncnn] installed:"
-find "$INSTALL_DIR/bin" -maxdepth 1 \( -name 'pnnx' -o -name 'ncnnoptimize' \) -printf '  %M %p\n' 2>/dev/null || true
+print_installed_tools
