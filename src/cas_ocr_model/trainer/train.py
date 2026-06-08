@@ -53,6 +53,7 @@ from .config import (
 from .data import CaptchaPairDataset, collate_triple
 from .losses import LossWeights, TripleHeadLoss, compute_accuracy
 from .model import CaptchaTripleHeadCNN
+from cas_ocr_model.model import ModelStats
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 
 try:
@@ -242,6 +243,29 @@ def sync_wandb_config(accelerator: Accelerator, cfg: FullConfig) -> None:
         return
     run = accelerator.get_tracker("wandb", unwrap=True)
     run.config.update(cfg_to_dict(cfg), allow_val_change=True)
+
+
+def sync_wandb_model_stats(
+    accelerator: Accelerator,
+    stats: ModelStats,
+) -> None:
+    """显式同步模型统计到 wandb summary."""
+    if not accelerator.is_main_process or not getattr(accelerator, "trackers", None):
+        return
+    tracker_names = {tracker.name for tracker in accelerator.trackers}
+    if "wandb" not in tracker_names:
+        return
+    run = accelerator.get_tracker("wandb", unwrap=True)
+    run.summary["model/params"] = stats.total_params
+    run.summary["model/trainable_params"] = stats.trainable_params
+    run.summary["model/params_m"] = stats.total_params / 1_000_000
+    run.summary["model/trainable_params_m"] = stats.trainable_params / 1_000_000
+    if stats.flops is not None:
+        run.summary["model/flops"] = stats.flops
+        run.summary["model/flops_g"] = stats.flops / 1_000_000_000
+        run.summary["model/flops_m"] = stats.flops / 1_000_000
+    run.summary["model/input_shape"] = str(stats.input_shape)
+    run.summary["model/stats"] = format_model_stats(stats)
 
 
 # ----------------------------------------------------------------------------
@@ -520,10 +544,31 @@ def main() -> None:
         f"gray_stem=rgb_mean"
     )
     if accelerator.is_main_process:
+        model_stats = collect_model_stats(model, cfg.data.image_size_h, cfg.data.image_size_w)
         accelerator.print(
             f"[model-stats] "
-            f"{format_model_stats(collect_model_stats(model, cfg.data.image_size_h, cfg.data.image_size_w))}"
+            f"{format_model_stats(model_stats)}"
         )
+        maybe_log_metrics(
+            accelerator,
+            {
+                "model/params": float(model_stats.total_params),
+                "model/trainable_params": float(model_stats.trainable_params),
+                "model/params_m": model_stats.total_params / 1_000_000,
+                "model/trainable_params_m": model_stats.trainable_params / 1_000_000,
+                **(
+                    {
+                        "model/flops": float(model_stats.flops),
+                        "model/flops_g": model_stats.flops / 1_000_000_000,
+                        "model/flops_m": model_stats.flops / 1_000_000,
+                    }
+                    if model_stats.flops is not None
+                    else {}
+                ),
+            },
+            step=0,
+        )
+        sync_wandb_model_stats(accelerator, model_stats)
     loss_fn = TripleHeadLoss(
         weights=LossWeights(
             digit_left=cfg.loss.weight_digit_left,
