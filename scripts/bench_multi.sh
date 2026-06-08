@@ -13,7 +13,11 @@ if [ ! -f "$CHECKPOINT" ]; then
     exit 1
 fi
 cd "$SHMTU_MODEL_ROOT"
-accelerate launch --num_processes "$SHMTU_NUM_GPUS" --mixed_precision fp16 \
+accelerate launch \
+    --num_processes "$SHMTU_NUM_GPUS" \
+    --num_machines 1 \
+    --dynamo_backend no \
+    --mixed_precision fp16 \
     -m cas_ocr_model.inference.multi_gpu_benchmark \
     --backend "$BACKEND" \
     --checkpoint "$CHECKPOINT" \

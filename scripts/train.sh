@@ -13,7 +13,7 @@ if ! command -v accelerate >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS"
+echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS --num_machines 1 --dynamo_backend no"
 echo "[train] config:  $CONFIG"
 echo "[train] dataset: $SHMTU_DATASET_ROOT"
 echo "[train] output:  $SHMTU_RUN_DIR"
@@ -21,7 +21,11 @@ echo "[train] output:  $SHMTU_RUN_DIR"
 mkdir -p "$SHMTU_RUN_DIR"
 cd "$SHMTU_MODEL_ROOT"
 
-accelerate launch --num_processes "$SHMTU_NUM_GPUS" --mixed_precision fp16 \
+accelerate launch \
+    --num_processes "$SHMTU_NUM_GPUS" \
+    --num_machines 1 \
+    --dynamo_backend no \
+    --mixed_precision fp16 \
     -m cas_ocr_model.trainer.train \
     --config "$CONFIG" \
     --data-root "$SHMTU_DATASET_ROOT" \

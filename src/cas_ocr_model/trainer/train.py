@@ -3,7 +3,7 @@
 调用方式 (任选其一):
 
 1) accelerate launch:
-   accelerate launch --num_processes 8 --mixed_precision fp16 \\
+   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed_precision fp16 \\
        -m cas_ocr_model.trainer.train \\
        --data-root ../../../../dataset --output-dir ./runs/exp1
 
@@ -12,7 +12,7 @@
        --data-root ../../../../dataset --output-dir ./runs/exp1
 
 3) YAML/TOML 配置 + CLI 覆盖:
-   accelerate launch --num_processes 8 --mixed_precision fp16 \\
+   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed_precision fp16 \\
        -m cas_ocr_model.trainer.train --config configs/8gpu_ddp.yaml
 
 主进程 (rank 0) 负责:
@@ -191,6 +191,21 @@ def create_epoch_progress(epoch: int, total_epochs: int, total_steps: int) -> tu
         lr="0.00e+00",
         samples_per_s="0",
     )
+    return progress, task_id
+
+
+def create_eval_progress(stage: str, total_steps: int) -> tuple[Progress, int]:
+    """构造验证 / 测试阶段的轻量进度条."""
+    progress = Progress(
+        TextColumn(f"[bold green]{stage}[/bold green]"),
+        BarColumn(bar_width=None),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        transient=False,
+    )
+    task_id = progress.add_task(stage, total=total_steps)
     return progress, task_id
 
 
@@ -494,20 +509,22 @@ def main() -> None:
         weight_decay=cfg.train.weight_decay,
     )
 
-    # 学习率调度基于加速后总步数
+    # 5) accelerate prepare (DDP + 自动混合精度 cast)
+    to_prepare = [model, optimizer, train_loader, val_loader]
+    if test_loader is not None:
+        to_prepare.append(test_loader)
+    prepared = accelerator.prepare(*to_prepare)
+    model, optimizer, train_loader, val_loader = prepared[:4]
+    test_loader = prepared[4] if len(prepared) > 4 else None
+
+    # 学习率调度必须基于 prepare 之后的本进程步数.
+    # DDP 下每个 rank 只迭代自己那一份数据; 若用 prepare 前的全局长度,
+    # rich 进度条会卡在 1/world_size, warmup/cosine 也会慢 world_size 倍.
     steps_per_epoch = math.ceil(len(train_loader) / cfg.train.gradient_accumulation_steps)
     total_steps = steps_per_epoch * cfg.train.epochs
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, make_linear_warmup_cosine(total_steps, cfg.train.warmup_ratio)
     )
-
-    # 5) accelerate prepare (DDP + 自动混合精度 cast)
-    to_prepare = [model, optimizer, train_loader, val_loader, scheduler]
-    if test_loader is not None:
-        to_prepare.append(test_loader)
-    prepared = accelerator.prepare(*to_prepare)
-    model, optimizer, train_loader, val_loader, scheduler = prepared[:5]
-    test_loader = prepared[5] if len(prepared) > 5 else None
 
     # 6) 可选: 断点续训
     start_epoch = 0
@@ -544,7 +561,14 @@ def main() -> None:
         )
 
         # 验证 (每个 epoch 结束, 用于 early-stop 决策 / 日志)
-        val_metrics = evaluate(accelerator, model, val_loader, loss_fn)
+        val_metrics = evaluate(
+            accelerator,
+            model,
+            val_loader,
+            loss_fn,
+            stage=f"val {epoch + 1}/{cfg.train.epochs}",
+            enable_rich_progress=enable_rich_progress,
+        )
         is_best = val_metrics["acc_expression"] > best_acc
         best_acc = max(best_acc, val_metrics["acc_expression"])
 
@@ -572,7 +596,14 @@ def main() -> None:
         # 最后一个 epoch 跑 test 集, 给出最终泛化指标
         is_last = (epoch + 1) == cfg.train.epochs
         if is_last and test_loader is not None:
-            test_metrics = evaluate(accelerator, model, test_loader, loss_fn)
+            test_metrics = evaluate(
+                accelerator,
+                model,
+                test_loader,
+                loss_fn,
+                stage="test",
+                enable_rich_progress=enable_rich_progress,
+            )
             accelerator.print(
                 f"[test][final] "
                 f"loss={test_metrics['loss']:.4f} "
@@ -615,24 +646,32 @@ def evaluate(
     model: nn.Module,
     loader: DataLoader,
     loss_fn: TripleHeadLoss,
+    *,
+    stage: str = "val",
+    enable_rich_progress: bool = False,
 ) -> dict[str, float]:
     model.eval()
     metric_sum = {"loss": 0.0}
     n = 0
-    for images, labels in loader:
-        outputs = model(images, return_aux=True)
-        losses = loss_fn(outputs, labels)
-        accs = compute_accuracy(outputs, labels)
-        bs = images.size(0)
-        for k, v in losses.items():
-            if k != "loss":
+    progress, task_id = create_eval_progress(stage, len(loader)) if enable_rich_progress else (None, None)
+    progress_ctx = progress if progress is not None else nullcontext()
+    with progress_ctx:
+        for images, labels in loader:
+            outputs = model(images, return_aux=True)
+            losses = loss_fn(outputs, labels)
+            accs = compute_accuracy(outputs, labels)
+            bs = images.size(0)
+            for k, v in losses.items():
+                if k != "loss":
+                    metric_sum.setdefault(k, 0.0)
+                    metric_sum[k] += v.item() * bs
+            metric_sum["loss"] += losses["loss"].item() * bs
+            for k, v in accs.items():
                 metric_sum.setdefault(k, 0.0)
-                metric_sum[k] += v.item() * bs
-        metric_sum["loss"] += losses["loss"].item() * bs
-        for k, v in accs.items():
-            metric_sum.setdefault(k, 0.0)
-            metric_sum[k] += v * bs
-        n += bs
+                metric_sum[k] += v * bs
+            n += bs
+            if progress is not None:
+                progress.advance(task_id, 1)
     metrics, _ = reduce_metric_sums(accelerator, metric_sum, n)
     return metrics
 
