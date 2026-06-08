@@ -12,8 +12,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from cas_ocr_model.expression import CANONICAL_OPERATOR_LABELS
-from cas_ocr_model.preprocess_ops import BINARIZE_MODES
+from cas_ocr_model.common.expression import CANONICAL_OPERATOR_LABELS
+from cas_ocr_model.common.preprocess import BINARIZE_MODES
 
 # ----------------------------------------------------------------------------
 # 标签字典

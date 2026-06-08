@@ -19,8 +19,8 @@ import torch
 from torch.utils.data import Dataset
 
 from cas_ocr_model.datasets.format import DatasetManifest, MANIFEST_FILENAME, scan_dataset
-from cas_ocr_model.expression import parse_captcha_expression
-from cas_ocr_model.preprocess_ops import decode_color_image, preprocess_captcha_to_tensor
+from cas_ocr_model.common.expression import parse_captcha_expression
+from cas_ocr_model.common.preprocess import decode_color_image, preprocess_captcha_to_tensor
 from .config import DIGIT2IDX, OP2IDX
 
 

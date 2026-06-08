@@ -17,7 +17,7 @@ from typing import Optional
 
 import numpy as np
 
-from cas_ocr_model.expression import parse_captcha_expression
+from cas_ocr_model.common.expression import parse_captcha_expression
 from .inference import CaptchaInferencer, InferenceResult
 
 # ----------------------------------------------------------------------------

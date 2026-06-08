@@ -88,3 +88,4 @@ def parse_captcha_expression(expr: str) -> Optional[ParsedExpression]:
         equal_token=equal_token,
         answer=answer,
     )
+
