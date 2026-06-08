@@ -23,6 +23,7 @@ from .config import (
 from .data import CaptchaPairDataset, collate_triple
 from .losses import LossWeights, TripleHeadLoss
 from .model import build_model_from_checkpoint
+from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 from .train import evaluate
 
 
@@ -67,6 +68,11 @@ def main() -> None:
     )
 
     model = build_model_from_checkpoint(args.checkpoint, device=accelerator.device)
+    if accelerator.is_main_process:
+        accelerator.print(
+            f"[model-stats] "
+            f"{format_model_stats(collect_model_stats(model, cfg.data.image_size_h, cfg.data.image_size_w))}"
+        )
     model = accelerator.prepare(model)
 
     loss_fn = TripleHeadLoss(

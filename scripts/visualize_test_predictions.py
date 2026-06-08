@@ -19,28 +19,55 @@ if str(SRC_DIR) not in sys.path:
 from cas_ocr_model.datasets.format import DatasetManifest
 from cas_ocr_model.inference import CaptchaInferencer, InferencerConfig
 from cas_ocr_model.inference.backends.pytorch_backend import PyTorchBackend
+from cas_ocr_model.trainer.config import FullConfig, load_config
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="从 test split 随机抽样并输出按预测表达式命名的图片"
     )
-    p.add_argument("--data-root", required=True, help="含 manifest.json 的数据集目录")
-    p.add_argument("--checkpoint", required=True, help="PyTorch checkpoint 路径")
+    p.add_argument("--config", default=None, help="训练配置文件路径 (yaml/toml)")
+    p.add_argument("--data-root", default=None, help="含 manifest.json 的数据集目录")
+    p.add_argument("--checkpoint", default=None, help="PyTorch checkpoint 路径")
     p.add_argument("--output-dir", default="output", help="输出根目录")
     p.add_argument("--subdir", default=None, help="输出子目录名, 默认自动生成")
     p.add_argument("--n", type=int, default=20, help="随机抽样数量")
     p.add_argument("--seed", type=int, default=42, help="随机种子")
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
-    p.add_argument("--backbone", default="resnet18")
-    p.add_argument("--image-size-h", type=int, default=64)
-    p.add_argument("--image-size-w", type=int, default=192)
-    p.add_argument("--threshold", type=int, default=200)
-    p.add_argument("--binarize-mode", default="min_channel_otsu")
-    p.add_argument("--adaptive-block-size", type=int, default=25)
-    p.add_argument("--adaptive-c", type=int, default=15)
-    p.add_argument("--batch-size", type=int, default=32)
+    p.add_argument("--backbone", default=None)
+    p.add_argument("--image-size-h", type=int, default=None)
+    p.add_argument("--image-size-w", type=int, default=None)
+    p.add_argument("--threshold", type=int, default=None)
+    p.add_argument("--binarize-mode", default=None)
+    p.add_argument("--adaptive-block-size", type=int, default=None)
+    p.add_argument("--adaptive-c", type=int, default=None)
+    p.add_argument("--batch-size", type=int, default=None)
     return p.parse_args()
+
+
+def resolve_args(args: argparse.Namespace) -> argparse.Namespace:
+    cfg = load_config(args.config) if args.config else FullConfig()
+    if args.data_root is None:
+        args.data_root = cfg.data.data_root
+    if args.checkpoint is None:
+        args.checkpoint = str(Path(cfg.train.output_dir) / "best.pt")
+    if args.backbone is None:
+        args.backbone = cfg.model.backbone
+    if args.image_size_h is None:
+        args.image_size_h = cfg.data.image_size_h
+    if args.image_size_w is None:
+        args.image_size_w = cfg.data.image_size_w
+    if args.threshold is None:
+        args.threshold = cfg.data.threshold
+    if args.binarize_mode is None:
+        args.binarize_mode = cfg.data.binarize_mode
+    if args.adaptive_block_size is None:
+        args.adaptive_block_size = cfg.data.adaptive_block_size
+    if args.adaptive_c is None:
+        args.adaptive_c = cfg.data.adaptive_c
+    if args.batch_size is None:
+        args.batch_size = min(32, cfg.train.per_device_batch_size)
+    return args
 
 
 def build_inferencer(args: argparse.Namespace) -> CaptchaInferencer:
@@ -120,7 +147,7 @@ def save_contact_sheet(records: list[dict], output_path: Path) -> None:
 
 
 def main() -> int:
-    args = parse_args()
+    args = resolve_args(parse_args())
     data_root = Path(args.data_root)
     output_dir = Path(args.output_dir)
     inferencer = build_inferencer(args)

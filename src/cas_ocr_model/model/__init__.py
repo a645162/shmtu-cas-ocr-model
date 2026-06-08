@@ -21,6 +21,13 @@ from .captcha_triple_head_cnn import (
     predict_triple,
 )
 from .heads import TripleHead
+from .stats import (
+    ModelStats,
+    collect_model_stats,
+    format_flops,
+    format_model_stats,
+    format_params_m,
+)
 
 __all__ = [
     # 当前模型
@@ -32,4 +39,9 @@ __all__ = [
     "build_resnet_backbone",
     "list_available_backbones",
     "TripleHead",
+    "ModelStats",
+    "collect_model_stats",
+    "format_flops",
+    "format_model_stats",
+    "format_params_m",
 ]

@@ -53,6 +53,7 @@ from .config import (
 from .data import CaptchaPairDataset, collate_triple
 from .losses import LossWeights, TripleHeadLoss, compute_accuracy
 from .model import CaptchaTripleHeadCNN
+from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 
 try:
     from rich.progress import (
@@ -209,6 +210,18 @@ def create_eval_progress(stage: str, total_steps: int) -> tuple[Progress, int]:
     return progress, task_id
 
 
+def describe_backbone_weights(backbone: str, pretrained: bool) -> str:
+    """返回启动日志里展示的 backbone 权重来源."""
+    if not pretrained:
+        return "None"
+    mapping = {
+        "resnet18": "ResNet18_Weights.IMAGENET1K_V1",
+        "resnet34": "ResNet34_Weights.IMAGENET1K_V1",
+        "mobilenet_v3_small": "MobileNet_V3_Small_Weights.IMAGENET1K_V1",
+    }
+    return mapping.get(backbone, "ImageNet pretrained")
+
+
 def maybe_log_metrics(
     accelerator: Accelerator,
     metrics: dict[str, float],
@@ -218,6 +231,17 @@ def maybe_log_metrics(
     if not metrics or not accelerator.is_main_process or not getattr(accelerator, "trackers", None):
         return
     accelerator.log(metrics, step=step)
+
+
+def sync_wandb_config(accelerator: Accelerator, cfg: FullConfig) -> None:
+    """显式同步 config 到 wandb, 让 run 页面稳定可见."""
+    if not accelerator.is_main_process or not getattr(accelerator, "trackers", None):
+        return
+    tracker_names = {tracker.name for tracker in accelerator.trackers}
+    if "wandb" not in tracker_names:
+        return
+    run = accelerator.get_tracker("wandb", unwrap=True)
+    run.config.update(cfg_to_dict(cfg), allow_val_change=True)
 
 
 # ----------------------------------------------------------------------------
@@ -379,6 +403,7 @@ def main() -> None:
             config=cfg_to_dict(cfg),
             init_kwargs=init_kwargs or None,
         )
+        sync_wandb_config(accelerator, cfg)
 
     effective_batch_size = (
         cfg.train.per_device_batch_size
@@ -488,6 +513,17 @@ def main() -> None:
         num_digit_classes=NUM_DIGIT_CLASSES,
         num_operator_classes=NUM_OPERATOR_CLASSES,
     )
+    accelerator.print(
+        f"[model] backbone={cfg.model.backbone} "
+        f"pretrained={cfg.model.pretrained} "
+        f"weights={describe_backbone_weights(cfg.model.backbone, cfg.model.pretrained)} "
+        f"gray_stem=rgb_mean"
+    )
+    if accelerator.is_main_process:
+        accelerator.print(
+            f"[model-stats] "
+            f"{format_model_stats(collect_model_stats(model, cfg.data.image_size_h, cfg.data.image_size_w))}"
+        )
     loss_fn = TripleHeadLoss(
         weights=LossWeights(
             digit_left=cfg.loss.weight_digit_left,

@@ -11,6 +11,7 @@ import numpy as np
 import torch
 
 from cas_ocr_model.model import build_model_from_checkpoint
+from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 from cas_ocr_model.trainer.config import (
     DIGIT_LABELS,
     OPERATOR_LABELS,
@@ -32,9 +33,18 @@ class PyTorchBackend:
         device: str = "cpu",
     ) -> None:
         del backbone
+        raw = torch.load(checkpoint, map_location="cpu")
+        cfg = raw.get("config", {}) if isinstance(raw, dict) else {}
+        data_cfg = cfg.get("data", {})
+        image_size_h = int(data_cfg.get("image_size_h", 64))
+        image_size_w = int(data_cfg.get("image_size_w", 192))
         self.device = torch.device(device)
         self.model = build_model_from_checkpoint(str(checkpoint), device=self.device)
         self.model.eval()
+        print(
+            f"[model-stats] "
+            f"{format_model_stats(collect_model_stats(self.model, image_size_h, image_size_w))}"
+        )
 
     @torch.no_grad()
     def infer(self, image: torch.Tensor) -> dict[str, np.ndarray]:

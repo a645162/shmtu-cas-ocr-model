@@ -22,34 +22,36 @@
 
 | 脚本 | 职责 | 典型用法 |
 |---|---|---|
-| `env.sh`                            | 公共环境变量 | `source scripts/env.sh` |
-| `cas_ocr_download_weights.sh`       | 仅下载 PyTorch 权重 (不采集) | `bash scripts/cas_ocr_download_weights.sh` |
-| `cas_ocr_collect.sh`                | 启动 maker 采集 jpg+json | `bash scripts/cas_ocr_collect.sh` |
-| `cas_ocr_split.sh`                  | 物理分割 train/val/test + 写 manifest | `bash scripts/cas_ocr_split.sh` |
-| `cas_ocr_train.sh`                  | 8 卡 DDP 训练 (accelerate launch + fp16) | `bash scripts/cas_ocr_train.sh` |
-| `cas_ocr_export.sh`                 | best.pt → model.onnx (仅导出脚本使用 ONNX) | `bash scripts/cas_ocr_export.sh` |
-| `cas_ocr_evaluate.sh`               | 单卡 evaluate (test 集) | `bash scripts/cas_ocr_evaluate.sh` |
-| `cas_ocr_bench_multi.sh`            | 多卡 DDP 精度 benchmark | `bash scripts/cas_ocr_bench_multi.sh` |
-| `cas_ocr_bench_single.sh`           | 单卡速度 benchmark | `bash scripts/cas_ocr_bench_single.sh` |
-| `visualize_test_predictions.py`     | 随机抽样 test 集并按预测表达式导出图片 | `python scripts/visualize_test_predictions.py --data-root ./dataset --checkpoint ./runs/exp1/best.pt` |
+| `env.sh`                        | 公共环境变量 | `source scripts/env.sh` |
+| `download_weights.sh`           | 仅下载 PyTorch 权重 (不采集) | `bash scripts/download_weights.sh` |
+| `collect.sh`                    | 启动 maker 采集 jpg+json | `bash scripts/collect.sh` |
+| `split.sh`                      | 物理分割 train/val/test + 写 manifest | `bash scripts/split.sh` |
+| `train.sh`                      | 8 卡 DDP 训练 (accelerate launch + fp16) | `bash scripts/train.sh` |
+| `export.sh`                     | best.pt → model.onnx (仅导出脚本使用 ONNX) | `bash scripts/export.sh` |
+| `evaluate.sh`                   | 单卡 evaluate (test 集) | `bash scripts/evaluate.sh` |
+| `bench_multi.sh`                | 多卡 DDP 精度 benchmark | `bash scripts/bench_multi.sh` |
+| `bench_single.sh`               | 单卡速度 benchmark | `bash scripts/bench_single.sh` |
+| `vis.sh`                        | 随机抽样 test 集并导出预测图 | `bash scripts/vis.sh` |
+| `visualize_test_predictions.py` | 可视化实现脚本 | `python scripts/visualize_test_predictions.py --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml` |
 
 ## 一键式工作流
 
 ```bash
 # 1) 准备 (只需跑一次)
 cd /home/konghaomin/Prj/SHMTU/shmtu-terminal/Model/shmtu-cas-ocr-model
-bash scripts/cas_ocr_download_weights.sh            # 预热权重缓存
-bash scripts/cas_ocr_collect.sh                      # 采集数据集 (默认 5000 张)
-bash scripts/cas_ocr_split.sh                        # 切 train/val/test
+bash scripts/download_weights.sh            # 预热权重缓存
+bash scripts/collect.sh                     # 采集数据集 (默认 5000 张)
+bash scripts/split.sh                       # 切 train/val/test
 
 # 2) 训练
-bash scripts/cas_ocr_train.sh                        # 8 卡 DDP, fp16, 30 epoch
-bash scripts/cas_ocr_export.sh                       # 导出 ONNX
+bash scripts/train.sh                       # 8 卡 DDP, fp16, 30 epoch
+bash scripts/export.sh                      # 导出 ONNX
 
 # 3) 评估 + benchmark
-bash scripts/cas_ocr_evaluate.sh                     # 算 acc / ECE / 混淆矩阵
-bash scripts/cas_ocr_bench_multi.sh                  # 多卡 DDP 精度
-bash scripts/cas_ocr_bench_single.sh                 # 单卡速度 (QPS)
+bash scripts/evaluate.sh                    # 算 acc / ECE / 混淆矩阵
+bash scripts/bench_multi.sh                 # 多卡 DDP 精度
+bash scripts/bench_single.sh                # 单卡速度 (QPS)
+bash scripts/vis.sh                         # 可视化 test 集预测
 ```
 
 ## 覆盖默认参数
@@ -57,15 +59,15 @@ bash scripts/cas_ocr_bench_single.sh                 # 单卡速度 (QPS)
 ```bash
 # 例: 采集 10000 张, 用 8 进程 × 4 协程, TCP 后端
 CAS_OCR_BACKEND=tcp COUNT=10000 PROCESSES=8 PER_PROCESS=4 \
-    bash scripts/cas_ocr_collect.sh
+    bash scripts/collect.sh
 
 # 例: 训练 4 卡 (单节点), 改输出目录
 CAS_OCR_NUM_GPUS=4 CAS_OCR_RUN_DIR=./runs/exp_4gpu \
-    bash scripts/cas_ocr_train.sh
+    bash scripts/train.sh
 
 # 例: 单卡速度 bench 用 CPU
 DEVICE=cpu NUM_SAMPLES=200 \
-    bash scripts/cas_ocr_bench_single.sh
+    bash scripts/bench_single.sh
 ```
 
 ## 前提
@@ -79,12 +81,14 @@ pip install -e ./Model/shmtu-cas-ocr-model
 ## 可视化脚本
 
 ```bash
-python scripts/visualize_test_predictions.py \
-    --data-root ./dataset \
-    --checkpoint ./runs/exp1/best.pt \
-    --output-dir ./output \
-    --n 20 \
-    --device cuda
+bash scripts/vis.sh
+
+CONFIG=src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml \
+CHECKPOINT=./runs/8gpu_ddp/best.pt \
+OUTPUT_DIR=./output \
+N=20 \
+DEVICE=cuda \
+    bash scripts/vis.sh
 ```
 
 输出目录下会生成一个子目录，里面包含：

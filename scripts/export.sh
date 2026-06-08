@@ -9,7 +9,7 @@ OUTPUT="${OUTPUT:-$SHMTU_RUN_DIR/model.onnx}"
 BACKBONE="${BACKBONE:-resnet18}"
 if [ ! -f "$CHECKPOINT" ]; then
     echo "[export] checkpoint 不存在: $CHECKPOINT"
-    echo "[export] 请先跑 cas_ocr_train.sh"
+    echo "[export] 请先跑 scripts/train.sh"
     exit 1
 fi
 cd "$SHMTU_MODEL_ROOT"
