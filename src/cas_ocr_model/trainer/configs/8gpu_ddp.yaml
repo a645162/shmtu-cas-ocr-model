@@ -56,7 +56,7 @@ train:
   save_every_n_epochs: 1           # checkpoint 保存间隔
   mixed_precision: fp16            # 与用户偏好对齐 (A100/H100/RTX40 也都支持)
   gradient_accumulation_steps: 1   # 梯度累积步数
-  report_to: none                  # 可选: none / wandb
+  report_to: auto                  # auto=已安装 wandb 且未被配置/环境禁用时自动启用
   tracker_project_name: cas-ocr-train # accelerate tracker project
   # wandb_run_name: mobilenet-ddp-exp1
   # wandb_entity: your-team

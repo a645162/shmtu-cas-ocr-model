@@ -135,14 +135,14 @@ class TrainConfig:
     resume_from: Optional[str] = None
     """checkpoint 路径, 断点续训."""
 
-    report_to: str = "none"
-    """实验跟踪后端: none / wandb / 逗号分隔列表 / all."""
+    report_to: str = "auto"
+    """实验跟踪后端: auto / none / wandb / 逗号分隔列表 / all."""
 
     tracker_project_name: str = "cas-ocr-train"
     """accelerate tracker project 名称."""
 
     wandb_run_name: Optional[str] = None
-    """可选 wandb run name."""
+    """可选 wandb run name. 不填时默认按 output_dir 自动生成."""
 
     wandb_entity: Optional[str] = None
     """可选 wandb entity / team."""

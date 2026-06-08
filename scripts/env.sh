@@ -19,6 +19,7 @@
 #   SHMTU_WEIGHTS_DIR       PyTorch 权重缓存
 #   SHMTU_NUM_GPUS          训练用 GPU 数
 #   SHMTU_PYTHON            Python 解释器
+#   SHMTU_DISABLE_WANDB     设为 1/true/yes/on 时禁用训练自动接入 wandb
 
 # ---- 模型根 / src ----
 export SHMTU_MODEL_ROOT="${SHMTU_MODEL_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"

@@ -104,6 +104,7 @@ accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed
 * **DDP 全局聚合日志**: train/val/test 指标按所有 rank 汇总, 可直接用于 console 和 wandb
 * **断点续训**: `--resume-from last.pt` 会恢复 model / optimizer / scheduler / global_step / best_acc / early-stop 计数
 * **逐 epoch 指标落盘**: 每轮都会写 `output_dir/epochs/epoch_XXXX.json`，并维护 `output_dir/metrics_history.json`
+* **wandb 自动探测**: `report_to=auto` 时, 若已安装 `wandb` 且环境变量未禁用, 启动训练时会自动接入
 
 ## wandb
 
@@ -114,9 +115,12 @@ pip install -e .[wandb]
 ```
 
 说明:
+* 默认 `report_to=auto`, 若已安装 `wandb` 会自动启用; 显式设为 `none` 可关闭
 * `--report-to wandb` 开启后, 训练会通过 `accelerate` tracker 自动只在主进程写 wandb
 * `--tracker-project-name` 控制 project 名称
+* `wandb_run_name` 未设置时会按 `output_dir` 自动生成, 例如 `runs/8gpu_ddp/20260608_153000` -> `8gpu_ddp/20260608_153000`
 * `--wandb-run-name` / `--wandb-entity` / `--wandb-tags` 用于附加 run 元数据
+* `SHMTU_DISABLE_WANDB=1`、`SHMTU_WANDB_DISABLED=1`、`WANDB_DISABLED=true` 或 `WANDB_MODE=disabled` 都会禁用自动接入
 * 若未安装 `wandb` 但显式开启了 `--report-to wandb`, 训练会直接报清晰错误
 
 ## 评估

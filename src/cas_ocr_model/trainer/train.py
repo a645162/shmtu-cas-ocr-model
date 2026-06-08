@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import time
 from contextlib import nullcontext
@@ -94,7 +95,7 @@ def parse_report_to(report_to: str | None) -> str | list[str] | None:
     if report_to is None:
         return None
     raw = report_to.strip()
-    if not raw or raw.lower() in {"none", "null", "false", "off"}:
+    if not raw or raw.lower() in {"none", "null", "false", "off", "disabled"}:
         return None
     if raw.lower() == "all":
         return "all"
@@ -102,6 +103,51 @@ def parse_report_to(report_to: str | None) -> str | list[str] | None:
     if not parts:
         return None
     return parts if len(parts) > 1 else parts[0]
+
+
+def is_truthy_env(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def wandb_is_disabled_by_env() -> tuple[bool, str | None]:
+    for name in ("SHMTU_DISABLE_WANDB", "SHMTU_WANDB_DISABLED", "WANDB_DISABLED"):
+        value = os.environ.get(name)
+        if is_truthy_env(value):
+            return True, f"{name}={value}"
+    mode = os.environ.get("WANDB_MODE")
+    if mode and mode.strip().lower() == "disabled":
+        return True, f"WANDB_MODE={mode}"
+    return False, None
+
+
+def is_wandb_installed() -> bool:
+    try:
+        import wandb  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def resolve_report_to(report_to: str | None) -> tuple[str | list[str] | None, str]:
+    raw = (report_to or "").strip()
+    lowered = raw.lower()
+    env_disabled, env_reason = wandb_is_disabled_by_env()
+
+    if lowered in {"", "auto"}:
+        if env_disabled:
+            return None, f"disabled-by-env:{env_reason}"
+        if is_wandb_installed():
+            return "wandb", "auto-wandb"
+        return None, "auto-no-wandb"
+
+    parsed = parse_report_to(report_to)
+    if parsed is None:
+        return None, f"config:{raw or 'none'}"
+    if env_disabled and ("wandb" in ([parsed] if isinstance(parsed, str) else list(parsed))):
+        return None, f"disabled-by-env:{env_reason}"
+    return parsed, f"config:{raw}"
 
 
 def ensure_tracker_dependencies(report_to: str | list[str] | None) -> None:
@@ -116,6 +162,34 @@ def ensure_tracker_dependencies(report_to: str | list[str] | None) -> None:
             raise RuntimeError(
                 "启用 wandb 需要先安装依赖: pip install -e .[wandb] 或 pip install wandb"
             ) from e
+
+
+def resolve_default_wandb_run_name(output_dir: str) -> str:
+    output_path = Path(output_dir).resolve()
+    runs_root_raw = os.environ.get("SHMTU_RUNS_ROOT")
+    if runs_root_raw:
+        runs_root = Path(runs_root_raw).resolve()
+        try:
+            rel_path = output_path.relative_to(runs_root)
+        except ValueError:
+            rel_path = None
+        if rel_path is not None and rel_path.parts:
+            return rel_path.as_posix()
+
+    if len(output_path.parts) >= 2:
+        return "/".join(output_path.parts[-2:])
+    return output_path.name
+
+
+def ensure_wandb_run_name(cfg: FullConfig, report_to: str | list[str] | None) -> None:
+    if cfg.train.wandb_run_name:
+        return
+    if report_to is None:
+        return
+    trackers = [report_to] if isinstance(report_to, str) else list(report_to)
+    if "wandb" not in trackers and report_to != "all":
+        return
+    cfg.train.wandb_run_name = resolve_default_wandb_run_name(cfg.train.output_dir)
 
 
 def build_tracker_init_kwargs(cfg: FullConfig) -> dict[str, dict[str, Any]]:
@@ -483,7 +557,8 @@ def main() -> None:
     # 1) 配置组装
     cfg = load_config(args.config) if args.config else FullConfig()
     cfg = merge_args_to_config(cfg, args)
-    report_to = parse_report_to(cfg.train.report_to)
+    report_to, tracker_resolution = resolve_report_to(cfg.train.report_to)
+    ensure_wandb_run_name(cfg, report_to)
     ensure_tracker_dependencies(report_to)
 
     # 2) accelerate 初始化 (DDP/混合精度/进程管理统一交给它)
@@ -505,7 +580,7 @@ def main() -> None:
         accelerator.init_trackers(
             project_name=cfg.train.tracker_project_name,
             config=cfg_to_dict(cfg),
-            init_kwargs=init_kwargs or None,
+            init_kwargs=init_kwargs,
         )
         sync_wandb_config(accelerator, cfg)
 
@@ -523,7 +598,8 @@ def main() -> None:
         accelerator.print(
             f"[config] output={cfg.train.output_dir} data={cfg.data.data_root} "
             f"backbone={cfg.model.backbone} batch/device={cfg.train.per_device_batch_size} "
-            f"effective_batch={effective_batch_size} tracker={cfg.train.report_to}"
+            f"effective_batch={effective_batch_size} tracker={report_to or 'none'} "
+            f"(raw={cfg.train.report_to}, reason={tracker_resolution})"
         )
         accelerator.print(f"[config] {cfg_to_dict(cfg)}")
 

@@ -18,6 +18,7 @@
 | `SHMTU_RESUME` | `0` | 设为 `1` 时从当前 profile/latest 对应 run 的 `last.pt` 续训 |
 | `SHMTU_RESUME_FROM` | 空 | 显式指定训练续训 checkpoint, 优先级高于 `SHMTU_RESUME=1` |
 | `SHMTU_AUTO_VIS` | `1` | 训练结束后自动运行 `vis.sh`，默认用 `last.pt` 从 test split 生成可视化 |
+| `SHMTU_DISABLE_WANDB` | `0` | 设为 `1/true/yes/on` 时禁用训练自动接入 wandb |
 | `CAS_OCR_WEIGHTS_DIR` | `$MODEL_ROOT/weights` | PyTorch 权重缓存 (gitignore) |
 | `CAS_OCR_NUM_GPUS` | `8` | 训练 / 多卡 bench 用的 GPU 数 |
 | `CAS_OCR_PYTHON` | `python3` | Python 解释器 |
