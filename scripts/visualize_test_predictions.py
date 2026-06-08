@@ -17,6 +17,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from cas_ocr_model.datasets.format import DatasetManifest
+from cas_ocr_model.common.expression import parse_captcha_expression
 from cas_ocr_model.inference import CaptchaInferencer, InferencerConfig
 from cas_ocr_model.inference.backends.pytorch_backend import PyTorchBackend
 from cas_ocr_model.trainer.config import FullConfig, load_config
@@ -108,11 +109,52 @@ def choose_test_samples(data_root: Path, n: int, seed: int) -> list[Path]:
     return rng.sample(jpg_paths, sample_size)
 
 
+def load_ground_truth(src_path: Path) -> dict[str, object]:
+    json_path = src_path.with_suffix(".json")
+    if not json_path.is_file():
+        return {"gt_expression": None, "gt_result": None, "ok": False}
+    try:
+        meta = json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"gt_expression": None, "gt_result": None, "ok": False}
+
+    expr = str(meta.get("expression", "")).strip()
+    parsed = parse_captcha_expression(expr)
+    if parsed is not None:
+        gt_expr = f"{parsed.digit_left}{parsed.operator}{parsed.digit_right}"
+        gt_result = parsed.answer
+        if gt_result is not None:
+            gt_expr = f"{gt_expr}={gt_result}"
+    else:
+        gt_expr = expr or None
+        answer = meta.get("answer")
+        gt_result = int(answer) if str(answer).isdigit() else None
+
+    return {
+        "gt_expression": gt_expr,
+        "gt_result": gt_result,
+        "ok": True,
+    }
+
+
 def make_output_subdir(output_dir: Path, subdir: str | None, n: int, seed: int) -> Path:
     name = subdir or f"test_samples_n{n}_seed{seed}"
     out = output_dir / name
     out.mkdir(parents=True, exist_ok=True)
     return out
+
+
+def _load_font(size: int) -> ImageFont.ImageFont:
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+    ]
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size=size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
 
 
 def save_contact_sheet(records: list[dict], output_path: Path) -> None:
@@ -122,14 +164,15 @@ def save_contact_sheet(records: list[dict], output_path: Path) -> None:
     thumb_w = 192
     thumb_h = 64
     padding = 12
-    caption_h = 44
+    caption_h = 82
     cols = min(4, len(records))
     rows = math.ceil(len(records) / cols)
     canvas_w = cols * (thumb_w + padding) + padding
     canvas_h = rows * (thumb_h + caption_h + padding) + padding
     canvas = Image.new("RGB", (canvas_w, canvas_h), color=(245, 245, 245))
     draw = ImageDraw.Draw(canvas)
-    font = ImageFont.load_default()
+    font_main = _load_font(14)
+    font_small = _load_font(13)
 
     for idx, record in enumerate(records):
         row, col = divmod(idx, cols)
@@ -140,8 +183,16 @@ def save_contact_sheet(records: list[dict], output_path: Path) -> None:
         img = img.resize((thumb_w, thumb_h))
         canvas.paste(img, (x, y))
 
-        caption = f'{record["prediction"]}  conf={record["confidence"]:.3f}'
-        draw.text((x, y + thumb_h + 6), caption, fill=(20, 20, 20), font=font)
+        status_text = "CORRECT" if record["is_correct"] else "WRONG"
+        status_color = (24, 140, 62) if record["is_correct"] else (210, 48, 44)
+        gt_expr = record["gt_expression"] or "N/A"
+        pred_expr = record["prediction_with_result"]
+        conf_text = f'conf={record["confidence"]:.3f}'
+
+        draw.text((x, y + thumb_h + 6), status_text, fill=status_color, font=font_main)
+        draw.text((x + 92, y + thumb_h + 6), conf_text, fill=(60, 60, 60), font=font_small)
+        draw.text((x, y + thumb_h + 28), f"GT: {gt_expr}", fill=(20, 20, 20), font=font_small)
+        draw.text((x, y + thumb_h + 48), f"Pred: {pred_expr}", fill=(20, 20, 20), font=font_small)
 
     canvas.save(output_path)
 
@@ -160,6 +211,7 @@ def main() -> int:
     records: list[dict] = []
 
     for src_path, pred in zip(sample_paths, results):
+        gt = load_ground_truth(src_path)
         stem = sanitize_expr_filename(pred.expression, pred.result)
         name_counts[stem] += 1
         suffix = f"__{name_counts[stem]}" if name_counts[stem] > 1 else ""
@@ -167,14 +219,24 @@ def main() -> int:
         dst_path = out_dir / dst_name
         dst_path.write_bytes(src_path.read_bytes())
 
+        prediction_with_result = (
+            f"{pred.expression}={pred.result}" if pred.result is not None else pred.expression
+        )
+        gt_expression = gt["gt_expression"]
+        is_correct = bool(gt["ok"]) and prediction_with_result == gt_expression
+
         records.append(
             {
                 "source_image": src_path.name,
                 "source_path": str(src_path),
                 "saved_image": dst_name,
                 "prediction": pred.expression,
+                "prediction_with_result": prediction_with_result,
                 "result": pred.result,
                 "confidence": pred.confidence,
+                "gt_expression": gt_expression,
+                "gt_result": gt["gt_result"],
+                "is_correct": is_correct,
             }
         )
 
@@ -191,8 +253,12 @@ def main() -> int:
                 "source_image": r["source_image"],
                 "saved_image": r["saved_image"],
                 "prediction": r["prediction"],
+                "prediction_with_result": r["prediction_with_result"],
                 "result": r["result"],
                 "confidence": r["confidence"],
+                "gt_expression": r["gt_expression"],
+                "gt_result": r["gt_result"],
+                "is_correct": r["is_correct"],
             }
             for r in records
         ],

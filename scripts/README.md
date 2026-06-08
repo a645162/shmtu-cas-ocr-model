@@ -17,6 +17,7 @@
 | `SHMTU_RUN_DIR` | 空 | 显式指定某个具体 run 目录; 不设时默认解析 profile 下 `latest` |
 | `SHMTU_RESUME` | `0` | 设为 `1` 时从当前 profile/latest 对应 run 的 `last.pt` 续训 |
 | `SHMTU_RESUME_FROM` | 空 | 显式指定训练续训 checkpoint, 优先级高于 `SHMTU_RESUME=1` |
+| `SHMTU_AUTO_VIS` | `1` | 训练结束后自动运行 `vis.sh`，默认用 `last.pt` 从 test split 生成可视化 |
 | `CAS_OCR_WEIGHTS_DIR` | `$MODEL_ROOT/weights` | PyTorch 权重缓存 (gitignore) |
 | `CAS_OCR_NUM_GPUS` | `8` | 训练 / 多卡 bench 用的 GPU 数 |
 | `CAS_OCR_PYTHON` | `python3` | Python 解释器 |
@@ -82,6 +83,10 @@ CAS_OCR_BACKEND=tcp COUNT=10000 PROCESSES=8 PER_PROCESS=4 \
 SHMTU_NUM_GPUS=4 SHMTU_PROFILE_NAME=exp_4gpu \
     bash scripts/train.sh
 
+# 例: 训练后不自动生成测试集可视化
+SHMTU_AUTO_VIS=0 \
+    bash scripts/train.sh
+
 # 例: 导出指定 profile 的 latest
 SHMTU_PROFILE_NAME=exp_4gpu \
     bash scripts/output/export_all.sh
@@ -131,7 +136,7 @@ DEVICE=cuda \
 输出目录下会生成一个子目录，里面包含：
 - 按预测结果命名的采样图片，例如 `9-2=7.jpg`
 - `predictions.json`
-- `contact_sheet.jpg`
+- `contact_sheet.jpg`，每张图下方展示 `GT` / `Pred` 公式，并用绿色 `CORRECT`、红色 `WRONG` 标注正误
 
 ## 数据保存路径 (全部 gitignored)
 

@@ -9,6 +9,10 @@ source "$SCRIPT_DIR/env.sh"
 CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
 RESUME_FROM="${RESUME_FROM:-${SHMTU_RESUME_FROM:-}}"
 RESUME="${RESUME:-${SHMTU_RESUME:-0}}"
+AUTO_VIS="${AUTO_VIS:-${SHMTU_AUTO_VIS:-1}}"
+VIS_CHECKPOINT="${VIS_CHECKPOINT:-last.pt}"
+VIS_N="${VIS_N:-20}"
+VIS_DEVICE="${VIS_DEVICE:-cuda}"
 
 if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
     SHMTU_PROFILE_NAME="$(basename "${CONFIG%.*}")"
@@ -69,3 +73,13 @@ accelerate launch \
     -m cas_ocr_model.trainer.train \
     "${TRAIN_ARGS[@]}" \
     "$@"
+
+if [ "$AUTO_VIS" = "1" ]; then
+    echo "[train] auto vis enabled"
+    CHECKPOINT="$RUN_DIR/$VIS_CHECKPOINT" \
+    OUTPUT_DIR="$RUN_DIR/outputs" \
+    N="$VIS_N" \
+    DEVICE="$VIS_DEVICE" \
+    SUBDIR="auto_test_vis" \
+        bash "$SCRIPT_DIR/vis.sh"
+fi

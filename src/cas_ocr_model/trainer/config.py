@@ -104,6 +104,9 @@ class TrainConfig:
     epochs: int = 30
     """总 epoch 数."""
 
+    early_stop_patience: int = 50
+    """验证集连续多少个 epoch 不提升后提前停止. <=0 表示关闭."""
+
     per_device_batch_size: int = 256
     """单卡 batch size. 8 卡 x 256 = 2048 effective."""
 
@@ -217,6 +220,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--output-dir", type=str, default=None)
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--epochs", type=int, default=None)
+    p.add_argument("--early-stop-patience", type=int, default=None)
     p.add_argument("--per-device-batch-size", type=int, default=None)
     p.add_argument("--learning-rate", type=float, default=None)
     p.add_argument("--weight-decay", type=float, default=None)
