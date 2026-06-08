@@ -71,7 +71,7 @@ accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed
 # 或完全 CLI (不走配置文件)
 torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
     --data-root /path/to/dataset --output-dir ./runs/exp1 \
-    --epochs 30 --per-device-batch-size 256 --learning-rate 8e-3 \
+    --epochs 500 --early-stop-patience -1 --per-device-batch-size 256 --learning-rate 8e-3 \
     --mixed-precision fp16 --label-smoothing 0.05
 
 # 从 last.pt 断点续训
@@ -95,13 +95,14 @@ accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed
 * **per_device_batch_size=256** × 8 卡 = 2048 effective
 * **学习率 8e-3** = 1e-3 × 8 (线性缩放规则)
 * **5% 线性 warmup** + cosine 衰减
+* **Early stop**: `train.early_stop_patience=0` 关闭; `-1` 自动取总 epoch 的 20%; 正整数表示连续多少个验证 epoch 不提升后停止
 * **梯度裁剪** L2=1.0
 * **AdamW** + 1e-4 weight decay
 * **ImageNet 预训练 backbone** (`resnet18` 或 `resnet34`)
 * **标签平滑** 0.05
 * **主进程 rich 进度条**: 交互式终端显示 step/loss/acc/lr/吞吐, 非 TTY 自动回退文本日志
 * **DDP 全局聚合日志**: train/val/test 指标按所有 rank 汇总, 可直接用于 console 和 wandb
-* **断点续训**: `--resume-from last.pt` 会恢复 model / optimizer / scheduler / global_step / best_acc
+* **断点续训**: `--resume-from last.pt` 会恢复 model / optimizer / scheduler / global_step / best_acc / early-stop 计数
 * **逐 epoch 指标落盘**: 每轮都会写 `output_dir/epochs/epoch_XXXX.json`，并维护 `output_dir/metrics_history.json`
 
 ## wandb

@@ -101,11 +101,11 @@ class TrainConfig:
     seed: int = 42
     """随机种子 (Python / NumPy / PyTorch / CUDA)."""
 
-    epochs: int = 30
+    epochs: int = 500
     """总 epoch 数."""
 
-    early_stop_patience: int = 50
-    """验证集连续多少个 epoch 不提升后提前停止. <=0 表示关闭."""
+    early_stop_patience: int = -1
+    """验证集连续多少个 epoch 不提升后提前停止. 0=关闭, -1=总 epoch 的 20%."""
 
     per_device_batch_size: int = 256
     """单卡 batch size. 8 卡 x 256 = 2048 effective."""

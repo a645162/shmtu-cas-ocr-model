@@ -45,7 +45,8 @@ model:
 train:
   output_dir: ./runs/8gpu_ddp    # checkpoint / 日志输出目录
   seed: 42                       # 随机种子
-  epochs: 30                     # 总 epoch 数
+  epochs: 300                    # 总 epoch 数
+  early_stop_patience: -1        # 0=关闭 early stop; -1=自动取总 epoch 的 20%
   per_device_batch_size: 256       # 8 卡 x 256 = 2048 effective
   learning_rate: 8.0e-3            # 1e-3 * 8 (线性缩放规则)
   weight_decay: 1.0e-4             # AdamW weight decay

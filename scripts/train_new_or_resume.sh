@@ -47,13 +47,15 @@ epoch = raw.get("epoch")
 config = raw.get("config") or {}
 train_cfg = config.get("train") or {}
 total_epochs = train_cfg.get("epochs")
+stop_reason = raw.get("stop_reason")
+early_stop_triggered = bool(raw.get("early_stop_triggered"))
 
 if epoch is None or total_epochs is None:
     raise SystemExit("invalid-checkpoint")
 
 epoch = int(epoch)
 total_epochs = int(total_epochs)
-done = 1 if (epoch + 1) >= total_epochs else 0
+done = 1 if (epoch + 1) >= total_epochs or early_stop_triggered or stop_reason == "early_stop" else 0
 print(f"{done} {epoch + 1} {total_epochs}")
 PY
 }

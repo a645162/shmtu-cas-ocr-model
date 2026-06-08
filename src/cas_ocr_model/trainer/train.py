@@ -320,6 +320,34 @@ def save_epoch_metrics(
     return history
 
 
+def resolve_early_stop_patience(cfg: FullConfig) -> int:
+    raw = int(cfg.train.early_stop_patience)
+    if raw == 0:
+        return 0
+    if raw == -1:
+        return max(1, math.ceil(cfg.train.epochs * 0.2))
+    if raw < -1:
+        raise ValueError("train.early_stop_patience 只允许 -1 / 0 / 正整数")
+    return raw
+
+
+def infer_early_stop_state(history: list[dict[str, Any]]) -> tuple[float, int]:
+    best_acc = -1.0
+    epochs_without_improve = 0
+    for item in sorted(history, key=lambda row: int(row.get("epoch", 0))):
+        val_metrics = item.get("val") or {}
+        val_acc = val_metrics.get("acc_expression")
+        if val_acc is None:
+            continue
+        val_acc = float(val_acc)
+        if val_acc > best_acc:
+            best_acc = val_acc
+            epochs_without_improve = 0
+        else:
+            epochs_without_improve += 1
+    return best_acc, epochs_without_improve
+
+
 # ----------------------------------------------------------------------------
 # 训练主循环
 # ----------------------------------------------------------------------------
@@ -663,7 +691,18 @@ def main() -> None:
     start_epoch = 0
     best_acc = -1.0
     global_step = 0
+    epochs_without_improve = 0
     metrics_history: list[dict[str, Any]] = load_metrics_history(cfg.train.output_dir)
+    early_stop_patience = resolve_early_stop_patience(cfg)
+    if early_stop_patience == 0:
+        accelerator.print("[early-stop] disabled (train.early_stop_patience=0)")
+    elif cfg.train.early_stop_patience == -1:
+        accelerator.print(
+            f"[early-stop] enabled raw=-1 resolved_patience={early_stop_patience} "
+            f"(20% of epochs={cfg.train.epochs})"
+        )
+    else:
+        accelerator.print(f"[early-stop] enabled patience={early_stop_patience}")
     if cfg.train.resume_from:
         ckpt = torch.load(cfg.train.resume_from, map_location="cpu")
         model_state = ckpt.get("model_state_dict")
@@ -680,7 +719,29 @@ def main() -> None:
         global_step = ckpt.get("global_step", start_epoch * steps_per_epoch)
         if not metrics_history:
             metrics_history = ckpt.get("metrics_history", [])
-        accelerator.print(f"[resume] from {cfg.train.resume_from} epoch={start_epoch} best={best_acc:.4f}")
+        if "epochs_without_improve" in ckpt:
+            epochs_without_improve = int(ckpt.get("epochs_without_improve", 0))
+        elif metrics_history:
+            inferred_best_acc, inferred_stale_epochs = infer_early_stop_state(metrics_history)
+            best_acc = max(best_acc, inferred_best_acc)
+            epochs_without_improve = inferred_stale_epochs
+        accelerator.print(
+            f"[resume] from {cfg.train.resume_from} epoch={start_epoch} "
+            f"best={best_acc:.4f} stale_epochs={epochs_without_improve}"
+        )
+    elif metrics_history:
+        inferred_best_acc, inferred_stale_epochs = infer_early_stop_state(metrics_history)
+        best_acc = max(best_acc, inferred_best_acc)
+        epochs_without_improve = inferred_stale_epochs
+
+    if early_stop_patience > 0 and epochs_without_improve >= early_stop_patience:
+        accelerator.print(
+            f"[early-stop] checkpoint already reached patience: "
+            f"stale_epochs={epochs_without_improve} patience={early_stop_patience}; skip training"
+        )
+        accelerator.wait_for_everyone()
+        accelerator.end_training()
+        return
 
     # 7) 训练循环
     enable_rich_progress = should_use_rich_progress(accelerator, cfg)
@@ -714,7 +775,14 @@ def main() -> None:
             enable_rich_progress=enable_rich_progress,
         )
         is_best = val_metrics["acc_expression"] > best_acc
+        if is_best:
+            epochs_without_improve = 0
+        else:
+            epochs_without_improve += 1
         best_acc = max(best_acc, val_metrics["acc_expression"])
+        early_stop_triggered = (
+            early_stop_patience > 0 and epochs_without_improve >= early_stop_patience
+        )
 
         train_time = time.time() - t0
         accelerator.print(
@@ -724,23 +792,26 @@ def main() -> None:
             f"val_loss={val_metrics['loss']:.4f} "
             f"val_acc_full={val_metrics['acc_expression']:.4f} "
             f"time={train_time:.1f}s "
-            f"best_val_acc={best_acc:.4f}"
+            f"best_val_acc={best_acc:.4f} "
+            f"stale_epochs={epochs_without_improve}"
         )
         maybe_log_metrics(
             accelerator,
             {
                 "epoch": float(epoch + 1),
                 "train/time_s": train_time,
+                "train/epochs_without_improve": float(epochs_without_improve),
                 **{f"train_epoch/{k}": v for k, v in train_metrics.items()},
                 **{f"val/{k}": v for k, v in val_metrics.items()},
             },
             step=global_step,
         )
 
-        # 最后一个 epoch 跑 test 集, 给出最终泛化指标
+        # 最后一个 epoch 或触发 early stop 时跑 test 集, 给出最终泛化指标
         is_last = (epoch + 1) == cfg.train.epochs
+        is_final_epoch = is_last or early_stop_triggered
         test_metrics: dict[str, float] | None = None
-        if is_last and test_loader is not None:
+        if is_final_epoch and test_loader is not None:
             test_metrics = evaluate(
                 accelerator,
                 model,
@@ -764,12 +835,21 @@ def main() -> None:
             )
 
         if accelerator.is_main_process:
+            stop_reason = None
+            if early_stop_triggered:
+                stop_reason = "early_stop"
+            elif is_last:
+                stop_reason = "max_epochs"
             epoch_record: dict[str, Any] = {
                 "epoch": epoch + 1,
                 "total_epochs": cfg.train.epochs,
                 "global_step": global_step,
                 "best_val_acc": best_acc,
                 "is_best": is_best,
+                "epochs_without_improve": epochs_without_improve,
+                "early_stop_patience": early_stop_patience,
+                "early_stop_triggered": early_stop_triggered,
+                "stop_reason": stop_reason,
                 "time_s": train_time,
                 "train": train_metrics,
                 "val": val_metrics,
@@ -783,7 +863,11 @@ def main() -> None:
             )
 
         # 8) checkpoint (rank 0 only)
-        if accelerator.is_main_process and (epoch + 1) % cfg.train.save_every_n_epochs == 0:
+        should_save_checkpoint = (
+            (epoch + 1) % cfg.train.save_every_n_epochs == 0
+            or is_final_epoch
+        )
+        if accelerator.is_main_process and should_save_checkpoint:
             save_checkpoint(
                 accelerator=accelerator,
                 model=model,
@@ -795,8 +879,19 @@ def main() -> None:
                 metrics=val_metrics,
                 is_best=is_best,
                 best_acc=best_acc,
+                epochs_without_improve=epochs_without_improve,
+                early_stop_patience=early_stop_patience,
+                early_stop_triggered=early_stop_triggered,
+                stop_reason=stop_reason,
                 metrics_history=metrics_history,
             )
+
+        if early_stop_triggered:
+            accelerator.print(
+                f"[early-stop] triggered at epoch={epoch + 1} "
+                f"stale_epochs={epochs_without_improve} patience={early_stop_patience}"
+            )
+            break
 
     accelerator.print("[done] training complete")
     accelerator.wait_for_everyone()
@@ -860,6 +955,10 @@ def save_checkpoint(
     metrics: dict[str, float],
     is_best: bool,
     best_acc: float,
+    epochs_without_improve: int,
+    early_stop_patience: int,
+    early_stop_triggered: bool,
+    stop_reason: str | None,
     metrics_history: list[dict[str, Any]],
 ) -> None:
     """rank 0 写盘. DDP unwrap 后存 model_state_dict.
@@ -880,6 +979,10 @@ def save_checkpoint(
         "global_step": global_step,
         "metrics": metrics,
         "best_acc": best_acc,
+        "epochs_without_improve": epochs_without_improve,
+        "early_stop_patience": early_stop_patience,
+        "early_stop_triggered": early_stop_triggered,
+        "stop_reason": stop_reason,
         "metrics_history": metrics_history,
         "config": cfg_to_dict(cfg),
     }
