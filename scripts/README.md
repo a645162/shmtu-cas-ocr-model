@@ -15,6 +15,8 @@
 | `SHMTU_RUNS_ROOT` | `$MODEL_ROOT/runs` | runs 根目录 (gitignore) |
 | `SHMTU_PROFILE_NAME` | `8gpu_ddp` | 当前实验 profile 名称 |
 | `SHMTU_RUN_DIR` | 空 | 显式指定某个具体 run 目录; 不设时默认解析 profile 下 `latest` |
+| `SHMTU_RESUME` | `0` | 设为 `1` 时从当前 profile/latest 对应 run 的 `last.pt` 续训 |
+| `SHMTU_RESUME_FROM` | 空 | 显式指定训练续训 checkpoint, 优先级高于 `SHMTU_RESUME=1` |
 | `CAS_OCR_WEIGHTS_DIR` | `$MODEL_ROOT/weights` | PyTorch 权重缓存 (gitignore) |
 | `CAS_OCR_NUM_GPUS` | `8` | 训练 / 多卡 bench 用的 GPU 数 |
 | `CAS_OCR_PYTHON` | `python3` | Python 解释器 |
@@ -30,6 +32,8 @@
 | `collect.sh`                    | 启动 maker 采集 jpg+json | `bash scripts/collect.sh` |
 | `split.sh`                      | 物理分割 train/val/test + 写 manifest | `bash scripts/split.sh` |
 | `train.sh`                      | 8 卡 DDP 训练 (accelerate launch + fp16) | `bash scripts/train.sh` |
+| `train_resume.sh`               | 自动续训当前 profile 的最后一个 run; 已完成则退出 | `bash scripts/train_resume.sh` |
+| `train_new_or_resume.sh`        | 无 latest 时新建训练, 未完成则续训, 已完成则退出 | `bash scripts/train_new_or_resume.sh` |
 | `export.sh`                     | best.pt → model.onnx (仅导出脚本使用 ONNX) | `bash scripts/export.sh` |
 | `output/install_ncnn_tools.sh`  | 下载 ncnn 预编译工具并准备 `pnnx` / `ncnnoptimize` | `bash scripts/output/install_ncnn_tools.sh` |
 | `output/export_onnx.sh`         | best.pt → model.onnx (稳定模式默认走 legacy exporter) | `bash scripts/output/export_onnx.sh` |
@@ -53,6 +57,9 @@ bash scripts/split.sh                       # 切 train/val/test
 
 # 2) 训练
 bash scripts/train.sh                       # 输出到 runs/{profile}/{YYYYMMDD_HHMMSS}, 并刷新 latest
+SHMTU_RESUME=1 bash scripts/train.sh       # 从当前 profile/latest/last.pt 续训, 继续写回原 run
+bash scripts/train_resume.sh               # 自动检查 latest/last.pt; 未完成则续训, 已完成则退出
+bash scripts/train_new_or_resume.sh        # 无 latest 则新建训练, 否则自动判断续训/退出
 bash scripts/export.sh                      # 导出 ONNX
 bash scripts/output/install_ncnn_tools.sh   # 下载 pnnx / ncnnoptimize
 bash scripts/output/export_all.sh           # 导出 ONNX + ncnn (pnnx)
@@ -82,6 +89,18 @@ SHMTU_PROFILE_NAME=exp_4gpu \
 # 例: 显式指定某个具体 run 目录
 SHMTU_RUN_DIR=./runs/exp_4gpu/20260608_153000 \
     bash scripts/evaluate.sh
+
+# 例: 从指定 checkpoint 续训, 继续写回该 checkpoint 所在 run 目录
+SHMTU_RESUME_FROM=./runs/exp_4gpu/20260608_153000/last.pt \
+    bash scripts/train.sh
+
+# 例: 自动续训当前 profile 的最后一个 run
+SHMTU_PROFILE_NAME=exp_4gpu \
+    bash scripts/train_resume.sh
+
+# 例: 自动选择新建或续训
+SHMTU_PROFILE_NAME=exp_4gpu \
+    bash scripts/train_new_or_resume.sh
 
 # 例: 单卡速度 bench 用 CPU
 DEVICE=cpu NUM_SAMPLES=200 \
@@ -122,5 +141,10 @@ DEVICE=cuda \
 | PyTorch 权重 | `$CAS_OCR_WEIGHTS_DIR/` (默认 `./weights/`) |
 | 训练输出 | `$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME/$date_time/` |
 | latest 指针 | `$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME/latest` (文件内容为相对路径) |
+
+训练 run 目录内会额外保存:
+- `last.pt` / `best.pt`
+- `metrics_history.json`
+- `epochs/epoch_0001.json`, `epochs/epoch_0002.json`, ...
 
 详见 `Model/shmtu-cas-ocr-model/.gitignore`。

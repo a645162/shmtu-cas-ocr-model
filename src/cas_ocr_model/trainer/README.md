@@ -74,6 +74,12 @@ torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
     --epochs 30 --per-device-batch-size 256 --learning-rate 8e-3 \
     --mixed-precision fp16 --label-smoothing 0.05
 
+# 从 last.pt 断点续训
+torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
+    --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml \
+    --output-dir ./runs/exp1 \
+    --resume-from ./runs/exp1/last.pt
+
 # 接入 wandb
 accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed_precision fp16 \
     -m cas_ocr_model.trainer.train \
@@ -95,6 +101,8 @@ accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed
 * **标签平滑** 0.05
 * **主进程 rich 进度条**: 交互式终端显示 step/loss/acc/lr/吞吐, 非 TTY 自动回退文本日志
 * **DDP 全局聚合日志**: train/val/test 指标按所有 rank 汇总, 可直接用于 console 和 wandb
+* **断点续训**: `--resume-from last.pt` 会恢复 model / optimizer / scheduler / global_step / best_acc
+* **逐 epoch 指标落盘**: 每轮都会写 `output_dir/epochs/epoch_XXXX.json`，并维护 `output_dir/metrics_history.json`
 
 ## wandb
 

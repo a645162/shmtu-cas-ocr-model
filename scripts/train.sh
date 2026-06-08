@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/env.sh"
 CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
+RESUME_FROM="${RESUME_FROM:-${SHMTU_RESUME_FROM:-}}"
+RESUME="${RESUME:-${SHMTU_RESUME:-0}}"
 
 if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
     SHMTU_PROFILE_NAME="$(basename "${CONFIG%.*}")"
@@ -19,16 +21,45 @@ if ! command -v accelerate >/dev/null 2>&1; then
     exit 1
 fi
 
-RUN_DIR="$(bash "$SCRIPT_DIR/run_path.sh" create)"
+if [ -z "$RESUME_FROM" ] && [ "$RESUME" = "1" ]; then
+    RESOLVED_RUN_DIR="$(bash "$SCRIPT_DIR/run_path.sh" resolve)"
+    if [ ! -d "$RESOLVED_RUN_DIR" ]; then
+        echo "[train] resume run 不存在: $RESOLVED_RUN_DIR"
+        exit 1
+    fi
+    RESUME_FROM="$RESOLVED_RUN_DIR/last.pt"
+fi
+
+if [ -n "$RESUME_FROM" ]; then
+    if [ ! -f "$RESUME_FROM" ]; then
+        echo "[train] resume checkpoint 不存在: $RESUME_FROM"
+        exit 1
+    fi
+    RUN_DIR="$(dirname "$RESUME_FROM")"
+else
+    RUN_DIR="$(bash "$SCRIPT_DIR/run_path.sh" create)"
+fi
 
 echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS --num_machines 1 --dynamo_backend no"
 echo "[train] config:  $CONFIG"
 echo "[train] dataset: $SHMTU_DATASET_ROOT"
 echo "[train] profile: $SHMTU_PROFILE_NAME"
 echo "[train] output:  $RUN_DIR"
+if [ -n "$RESUME_FROM" ]; then
+    echo "[train] resume:  $RESUME_FROM"
+fi
 
 mkdir -p "$RUN_DIR"
 cd "$SHMTU_MODEL_ROOT"
+
+TRAIN_ARGS=(
+    --config "$CONFIG"
+    --data-root "$SHMTU_DATASET_ROOT"
+    --output-dir "$RUN_DIR"
+)
+if [ -n "$RESUME_FROM" ]; then
+    TRAIN_ARGS+=(--resume-from "$RESUME_FROM")
+fi
 
 accelerate launch \
     --num_processes "$SHMTU_NUM_GPUS" \
@@ -36,7 +67,5 @@ accelerate launch \
     --dynamo_backend no \
     --mixed_precision fp16 \
     -m cas_ocr_model.trainer.train \
-    --config "$CONFIG" \
-    --data-root "$SHMTU_DATASET_ROOT" \
-    --output-dir "$RUN_DIR" \
+    "${TRAIN_ARGS[@]}" \
     "$@"

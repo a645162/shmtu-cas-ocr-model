@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
 import time
@@ -266,6 +267,57 @@ def sync_wandb_model_stats(
         run.summary["model/flops_m"] = stats.flops / 1_000_000
     run.summary["model/input_shape"] = str(stats.input_shape)
     run.summary["model/stats"] = format_model_stats(stats)
+
+
+def atomic_write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    tmp_path.replace(path)
+
+
+def load_metrics_history(output_dir: str | Path) -> list[dict[str, Any]]:
+    history_path = Path(output_dir) / "metrics_history.json"
+    if not history_path.is_file():
+        return []
+    try:
+        payload = json.loads(history_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return payload if isinstance(payload, list) else []
+
+
+def upsert_epoch_record(history: list[dict[str, Any]], record: dict[str, Any]) -> list[dict[str, Any]]:
+    epoch = int(record["epoch"])
+    updated = False
+    new_history: list[dict[str, Any]] = []
+    for item in history:
+        if int(item.get("epoch", -1)) == epoch:
+            new_history.append(record)
+            updated = True
+        else:
+            new_history.append(item)
+    if not updated:
+        new_history.append(record)
+    new_history.sort(key=lambda item: int(item.get("epoch", 0)))
+    return new_history
+
+
+def save_epoch_metrics(
+    output_dir: str | Path,
+    record: dict[str, Any],
+    history: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    output_dir = Path(output_dir)
+    epoch_file = output_dir / "epochs" / f"epoch_{int(record['epoch']):04d}.json"
+    history_file = output_dir / "metrics_history.json"
+    history = upsert_epoch_record(history, record)
+    atomic_write_json(epoch_file, record)
+    atomic_write_json(history_file, history)
+    return history
 
 
 # ----------------------------------------------------------------------------
@@ -611,12 +663,23 @@ def main() -> None:
     start_epoch = 0
     best_acc = -1.0
     global_step = 0
+    metrics_history: list[dict[str, Any]] = load_metrics_history(cfg.train.output_dir)
     if cfg.train.resume_from:
         ckpt = torch.load(cfg.train.resume_from, map_location="cpu")
-        accelerator.load_state(cfg.train.resume_from)
+        model_state = ckpt.get("model_state_dict")
+        if model_state is not None:
+            accelerator.unwrap_model(model).load_state_dict(model_state)
+        optimizer_state = ckpt.get("optimizer_state_dict")
+        if optimizer_state is not None:
+            optimizer.load_state_dict(optimizer_state)
+        scheduler_state = ckpt.get("scheduler_state_dict")
+        if scheduler_state is not None:
+            scheduler.load_state_dict(scheduler_state)
         start_epoch = ckpt.get("epoch", 0) + 1
         best_acc = ckpt.get("best_acc", -1.0)
-        global_step = start_epoch * steps_per_epoch
+        global_step = ckpt.get("global_step", start_epoch * steps_per_epoch)
+        if not metrics_history:
+            metrics_history = ckpt.get("metrics_history", [])
         accelerator.print(f"[resume] from {cfg.train.resume_from} epoch={start_epoch} best={best_acc:.4f}")
 
     # 7) 训练循环
@@ -676,6 +739,7 @@ def main() -> None:
 
         # 最后一个 epoch 跑 test 集, 给出最终泛化指标
         is_last = (epoch + 1) == cfg.train.epochs
+        test_metrics: dict[str, float] | None = None
         if is_last and test_loader is not None:
             test_metrics = evaluate(
                 accelerator,
@@ -699,16 +763,39 @@ def main() -> None:
                 step=global_step,
             )
 
+        if accelerator.is_main_process:
+            epoch_record: dict[str, Any] = {
+                "epoch": epoch + 1,
+                "total_epochs": cfg.train.epochs,
+                "global_step": global_step,
+                "best_val_acc": best_acc,
+                "is_best": is_best,
+                "time_s": train_time,
+                "train": train_metrics,
+                "val": val_metrics,
+                "test": test_metrics,
+                "config": cfg_to_dict(cfg),
+            }
+            metrics_history = save_epoch_metrics(
+                cfg.train.output_dir,
+                epoch_record,
+                metrics_history,
+            )
+
         # 8) checkpoint (rank 0 only)
         if accelerator.is_main_process and (epoch + 1) % cfg.train.save_every_n_epochs == 0:
             save_checkpoint(
                 accelerator=accelerator,
                 model=model,
+                optimizer=optimizer,
+                scheduler=scheduler,
                 epoch=epoch,
+                global_step=global_step,
                 cfg=cfg,
                 metrics=val_metrics,
                 is_best=is_best,
                 best_acc=best_acc,
+                metrics_history=metrics_history,
             )
 
     accelerator.print("[done] training complete")
@@ -765,11 +852,15 @@ def evaluate(
 def save_checkpoint(
     accelerator: Accelerator,
     model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
     epoch: int,
+    global_step: int,
     cfg: FullConfig,
     metrics: dict[str, float],
     is_best: bool,
     best_acc: float,
+    metrics_history: list[dict[str, Any]],
 ) -> None:
     """rank 0 写盘. DDP unwrap 后存 model_state_dict.
 
@@ -784,8 +875,12 @@ def save_checkpoint(
     state = {
         "epoch": epoch,
         "model_state_dict": unwrapped.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": scheduler.state_dict(),
+        "global_step": global_step,
         "metrics": metrics,
         "best_acc": best_acc,
+        "metrics_history": metrics_history,
         "config": cfg_to_dict(cfg),
     }
     last_path = output_dir / "last.pt"
