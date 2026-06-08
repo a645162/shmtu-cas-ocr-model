@@ -624,9 +624,6 @@ def main() -> None:
             {
                 "run/world_size": float(accelerator.num_processes),
                 "run/effective_batch_size": float(effective_batch_size),
-                "data/train_samples": float(len(train_ds)),
-                "data/val_samples": float(len(val_ds)),
-                "data/test_samples": float(len(test_ds) if test_ds else 0),
             },
             step=0,
         )
@@ -684,6 +681,16 @@ def main() -> None:
         f"image_size=({cfg.data.image_size_h},{cfg.data.image_size_w}) "
         f"binarize={cfg.data.binarize_mode}"
     )
+    if accelerator.is_main_process:
+        maybe_log_metrics(
+            accelerator,
+            {
+                "data/train_samples": float(len(train_ds)),
+                "data/val_samples": float(len(val_ds)),
+                "data/test_samples": float(len(test_ds) if test_ds else 0),
+            },
+            step=0,
+        )
 
     train_loader = DataLoader(
         train_ds,
