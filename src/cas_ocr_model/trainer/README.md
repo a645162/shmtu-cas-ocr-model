@@ -55,7 +55,7 @@ dataset/
 
 ```bash
 # accelerate launch (推荐)
-accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed_precision fp16 \
+accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision fp16 \
     -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml
 
@@ -64,7 +64,7 @@ torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml
 
 # 或 TOML 配置
-accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed_precision fp16 \
+accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision fp16 \
     -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/mobile_small.toml
 
@@ -81,7 +81,7 @@ torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
     --resume-from ./runs/exp1/last.pt
 
 # 接入 wandb
-accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed_precision fp16 \
+accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision fp16 \
     -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml \
     --report-to wandb \
@@ -92,6 +92,7 @@ accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed
 
 要点:
 * **fp16 混合精度** (用户偏好; A100/H100/RTX40 都支持)
+* **默认启用 TorchDynamo/Inductor**: shell 脚本默认 `SHMTU_DYNAMO_BACKEND=inductor`; 若遇兼容问题可临时设 `SHMTU_DYNAMO_BACKEND=no`
 * **per_device_batch_size=256** × 8 卡 = 2048 effective
 * **学习率 8e-3** = 1e-3 × 8 (线性缩放规则)
 * **5% 线性 warmup** + cosine 衰减

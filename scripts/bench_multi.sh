@@ -23,7 +23,7 @@ cd "$SHMTU_MODEL_ROOT"
 accelerate launch \
     --num_processes "$SHMTU_NUM_GPUS" \
     --num_machines 1 \
-    --dynamo_backend no \
+    --dynamo_backend "$SHMTU_DYNAMO_BACKEND" \
     --mixed_precision fp16 \
     -m cas_ocr_model.inference.multi_gpu_benchmark \
     --backend "$BACKEND" \

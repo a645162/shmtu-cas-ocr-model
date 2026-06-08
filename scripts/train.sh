@@ -44,7 +44,7 @@ else
     RUN_DIR="$(bash "$SCRIPT_DIR/run_path.sh" create)"
 fi
 
-echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS --num_machines 1 --dynamo_backend no"
+echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS --num_machines 1 --dynamo_backend $SHMTU_DYNAMO_BACKEND"
 echo "[train] config:  $CONFIG"
 echo "[train] dataset: $SHMTU_DATASET_ROOT"
 echo "[train] profile: $SHMTU_PROFILE_NAME"
@@ -68,7 +68,7 @@ fi
 accelerate launch \
     --num_processes "$SHMTU_NUM_GPUS" \
     --num_machines 1 \
-    --dynamo_backend no \
+    --dynamo_backend "$SHMTU_DYNAMO_BACKEND" \
     --mixed_precision fp16 \
     -m cas_ocr_model.trainer.train \
     "${TRAIN_ARGS[@]}" \

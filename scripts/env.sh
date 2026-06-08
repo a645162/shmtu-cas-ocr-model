@@ -20,6 +20,7 @@
 #   SHMTU_NUM_GPUS          训练用 GPU 数
 #   SHMTU_PYTHON            Python 解释器
 #   SHMTU_DISABLE_WANDB     设为 1/true/yes/on 时禁用训练自动接入 wandb
+#   SHMTU_DYNAMO_BACKEND    accelerate dynamo backend, 默认 inductor; 可设为 no 回退
 
 # ---- 模型根 / src ----
 export SHMTU_MODEL_ROOT="${SHMTU_MODEL_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -63,6 +64,7 @@ fi
 export SHMTU_WEIGHTS_DIR="${SHMTU_WEIGHTS_DIR:-$SHMTU_MODEL_DIR}"
 export SHMTU_NUM_GPUS="${SHMTU_NUM_GPUS:-8}"
 export SHMTU_PYTHON="${SHMTU_PYTHON:-python3}"
+export SHMTU_DYNAMO_BACKEND="${SHMTU_DYNAMO_BACKEND:-inductor}"
 
 # 仓库根 (lib shmtu-cas-python 路径)
 export SHMTU_REPO_ROOT="${SHMTU_REPO_ROOT:-$(cd "$SHMTU_MODEL_ROOT/../.." && pwd)}"
@@ -82,4 +84,5 @@ if [ "${SHMTU_ENV_SILENT:-0}" != "1" ]; then
     echo "[env] SHMTU_OCR_HTTP_URL   = $SHMTU_OCR_HTTP_URL"
     echo "[env] SHMTU_OCR_HOST:PORT  = $SHMTU_OCR_HOST:$SHMTU_OCR_PORT"
     echo "[env] SHMTU_NUM_GPUS       = $SHMTU_NUM_GPUS"
+    echo "[env] SHMTU_DYNAMO_BACKEND = $SHMTU_DYNAMO_BACKEND"
 fi

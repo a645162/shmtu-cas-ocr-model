@@ -3,7 +3,7 @@
 调用方式 (任选其一):
 
 1) accelerate launch:
-   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed_precision fp16 \\
+   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision fp16 \\
        -m cas_ocr_model.trainer.train \\
        --data-root ../../../../dataset --output-dir ./runs/exp1
 
@@ -12,7 +12,7 @@
        --data-root ../../../../dataset --output-dir ./runs/exp1
 
 3) YAML/TOML 配置 + CLI 覆盖:
-   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend no --mixed_precision fp16 \\
+   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision fp16 \\
        -m cas_ocr_model.trainer.train --config configs/8gpu_ddp.yaml
 
 主进程 (rank 0) 负责:
