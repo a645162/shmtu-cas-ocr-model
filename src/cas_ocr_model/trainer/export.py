@@ -39,6 +39,11 @@ def main() -> None:
     p.add_argument("--image-size-w", type=int, default=192)
     p.add_argument("--opset", type=int, default=17)
     p.add_argument("--dynamic-batch", action="store_true", help="动态 batch 维度")
+    p.add_argument(
+        "--legacy-exporter",
+        action="store_true",
+        help="使用旧版 TorchScript ONNX 导出器 (dynamo=False)，兼容性通常更稳",
+    )
     args = p.parse_args()
 
     model = build_model_from_checkpoint(args.checkpoint, device="cpu")
@@ -68,6 +73,7 @@ def main() -> None:
         dynamic_axes=dynamic_axes,
         opset_version=args.opset,
         do_constant_folding=True,
+        dynamo=not args.legacy_exporter,
     )
     print(f"[export] saved -> {args.output}")
 

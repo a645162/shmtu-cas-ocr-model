@@ -7,7 +7,7 @@ source "$SCRIPT_DIR/env.sh"
 
 CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
 CHECKPOINT="${CHECKPOINT:-$SHMTU_RUN_DIR/best.pt}"
-OUTPUT_DIR="${OUTPUT_DIR:-$SHMTU_MODEL_ROOT/output}"
+OUTPUT_DIR="${OUTPUT_DIR:-$SHMTU_MODEL_ROOT/outputs}"
 DEVICE="${DEVICE:-cuda}"
 N="${N:-20}"
 SEED="${SEED:-42}"

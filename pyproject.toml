@@ -29,6 +29,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+export = [
+    "onnx>=1.18",
+    "onnxscript>=0.5",
+]
 wandb = [
     "wandb>=0.17",
 ]
