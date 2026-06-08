@@ -120,6 +120,8 @@ pip install -e .[wandb]
 * `--tracker-project-name` 控制 project 名称
 * `wandb_run_name` 未设置时会按 `output_dir` 自动生成, 例如 `runs/8gpu_ddp/20260608_153000` -> `8gpu_ddp/20260608_153000`
 * `--wandb-run-name` / `--wandb-entity` / `--wandb-tags` 用于附加 run 元数据
+* 指标命名分组: `step/train/*` 表示训练过程中的窗口指标; `epoch/train/*` / `epoch/val/*` / `epoch/test/*` 表示每轮聚合指标
+* 额外状态指标: `best/*` 记录当前最佳验证结果, `early_stop/*` 记录 patience / stale epochs / 是否触发, `epoch/gap/*` 用于观察 train-val 间隙
 * `SHMTU_DISABLE_WANDB=1`、`SHMTU_WANDB_DISABLED=1`、`WANDB_DISABLED=true` 或 `WANDB_MODE=disabled` 都会禁用自动接入
 * 若未安装 `wandb` 但显式开启了 `--report-to wandb`, 训练会直接报清晰错误
 

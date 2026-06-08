@@ -309,6 +309,10 @@ def maybe_log_metrics(
     accelerator.log(metrics, step=step)
 
 
+def prefix_metrics(prefix: str, metrics: dict[str, float]) -> dict[str, float]:
+    return {f"{prefix}{key}": value for key, value in metrics.items()}
+
+
 def sync_wandb_config(accelerator: Accelerator, cfg: FullConfig) -> None:
     """显式同步 config 到 wandb, 让 run 页面稳定可见."""
     if not accelerator.is_main_process or not getattr(accelerator, "trackers", None):
@@ -405,10 +409,12 @@ def resolve_early_stop_patience(cfg: FullConfig) -> int:
     return raw
 
 
-def infer_early_stop_state(history: list[dict[str, Any]]) -> tuple[float, int]:
+def infer_early_stop_state(history: list[dict[str, Any]]) -> tuple[float, int, int]:
     best_acc = -1.0
+    best_epoch = 0
     epochs_without_improve = 0
     for item in sorted(history, key=lambda row: int(row.get("epoch", 0))):
+        epoch = int(item.get("epoch", 0))
         val_metrics = item.get("val") or {}
         val_acc = val_metrics.get("acc_expression")
         if val_acc is None:
@@ -416,10 +422,27 @@ def infer_early_stop_state(history: list[dict[str, Any]]) -> tuple[float, int]:
         val_acc = float(val_acc)
         if val_acc > best_acc:
             best_acc = val_acc
+            best_epoch = epoch
             epochs_without_improve = 0
         else:
             epochs_without_improve += 1
-    return best_acc, epochs_without_improve
+    return best_acc, epochs_without_improve, best_epoch
+
+
+def infer_best_val_loss_state(history: list[dict[str, Any]]) -> tuple[float, int]:
+    best_val_loss = float("inf")
+    best_val_loss_epoch = 0
+    for item in sorted(history, key=lambda row: int(row.get("epoch", 0))):
+        epoch = int(item.get("epoch", 0))
+        val_metrics = item.get("val") or {}
+        val_loss = val_metrics.get("loss")
+        if val_loss is None:
+            continue
+        val_loss = float(val_loss)
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_val_loss_epoch = epoch
+    return best_val_loss, best_val_loss_epoch
 
 
 # ----------------------------------------------------------------------------
@@ -530,11 +553,12 @@ def train_one_epoch(
             maybe_log_metrics(
                 accelerator,
                 {
-                    "train/epoch": float(epoch),
-                    "train/epoch_step": float(epoch_update_step),
-                    "train/lr": lr,
-                    "train/samples_per_s": samples_per_s,
-                    **{f"train/{k}": v for k, v in window_metrics.items()},
+                    "step/epoch": float(epoch),
+                    "step/epoch_step": float(epoch_update_step),
+                    "step/global_step": float(global_step),
+                    "step/train/lr": lr,
+                    "step/train/samples_per_s": samples_per_s,
+                    **prefix_metrics("step/train/", window_metrics),
                 },
                 step=global_step,
             )
@@ -595,6 +619,17 @@ def main() -> None:
         f"grad_accum={cfg.train.gradient_accumulation_steps}"
     )
     if accelerator.is_main_process:
+        maybe_log_metrics(
+            accelerator,
+            {
+                "run/world_size": float(accelerator.num_processes),
+                "run/effective_batch_size": float(effective_batch_size),
+                "data/train_samples": float(len(train_ds)),
+                "data/val_samples": float(len(val_ds)),
+                "data/test_samples": float(len(test_ds) if test_ds else 0),
+            },
+            step=0,
+        )
         accelerator.print(
             f"[config] output={cfg.train.output_dir} data={cfg.data.data_root} "
             f"backbone={cfg.model.backbone} batch/device={cfg.train.per_device_batch_size} "
@@ -766,6 +801,9 @@ def main() -> None:
     # 6) 可选: 断点续训
     start_epoch = 0
     best_acc = -1.0
+    best_epoch = 0
+    best_val_loss = float("inf")
+    best_val_loss_epoch = 0
     global_step = 0
     epochs_without_improve = 0
     metrics_history: list[dict[str, Any]] = load_metrics_history(cfg.train.output_dir)
@@ -792,22 +830,32 @@ def main() -> None:
             scheduler.load_state_dict(scheduler_state)
         start_epoch = ckpt.get("epoch", 0) + 1
         best_acc = ckpt.get("best_acc", -1.0)
+        best_epoch = int(ckpt.get("best_epoch", 0))
+        best_val_loss = float(ckpt.get("best_val_loss", float("inf")))
+        best_val_loss_epoch = int(ckpt.get("best_val_loss_epoch", 0))
         global_step = ckpt.get("global_step", start_epoch * steps_per_epoch)
         if not metrics_history:
             metrics_history = ckpt.get("metrics_history", [])
         if "epochs_without_improve" in ckpt:
             epochs_without_improve = int(ckpt.get("epochs_without_improve", 0))
         elif metrics_history:
-            inferred_best_acc, inferred_stale_epochs = infer_early_stop_state(metrics_history)
+            inferred_best_acc, inferred_stale_epochs, inferred_best_epoch = infer_early_stop_state(metrics_history)
             best_acc = max(best_acc, inferred_best_acc)
+            if best_epoch <= 0:
+                best_epoch = inferred_best_epoch
             epochs_without_improve = inferred_stale_epochs
+        if metrics_history and (not math.isfinite(best_val_loss) or best_val_loss == float("inf")):
+            best_val_loss, best_val_loss_epoch = infer_best_val_loss_state(metrics_history)
         accelerator.print(
             f"[resume] from {cfg.train.resume_from} epoch={start_epoch} "
-            f"best={best_acc:.4f} stale_epochs={epochs_without_improve}"
+            f"best={best_acc:.4f} best_epoch={best_epoch} "
+            f"best_val_loss={best_val_loss:.4f} stale_epochs={epochs_without_improve}"
         )
     elif metrics_history:
-        inferred_best_acc, inferred_stale_epochs = infer_early_stop_state(metrics_history)
+        inferred_best_acc, inferred_stale_epochs, inferred_best_epoch = infer_early_stop_state(metrics_history)
         best_acc = max(best_acc, inferred_best_acc)
+        best_epoch = inferred_best_epoch
+        best_val_loss, best_val_loss_epoch = infer_best_val_loss_state(metrics_history)
         epochs_without_improve = inferred_stale_epochs
 
     if early_stop_patience > 0 and epochs_without_improve >= early_stop_patience:
@@ -851,8 +899,12 @@ def main() -> None:
             enable_rich_progress=enable_rich_progress,
         )
         is_best = val_metrics["acc_expression"] > best_acc
+        if val_metrics["loss"] < best_val_loss:
+            best_val_loss = val_metrics["loss"]
+            best_val_loss_epoch = epoch + 1
         if is_best:
             epochs_without_improve = 0
+            best_epoch = epoch + 1
         else:
             epochs_without_improve += 1
         best_acc = max(best_acc, val_metrics["acc_expression"])
@@ -874,11 +926,24 @@ def main() -> None:
         maybe_log_metrics(
             accelerator,
             {
-                "epoch": float(epoch + 1),
-                "train/time_s": train_time,
-                "train/epochs_without_improve": float(epochs_without_improve),
-                **{f"train_epoch/{k}": v for k, v in train_metrics.items()},
-                **{f"val/{k}": v for k, v in val_metrics.items()},
+                "epoch/index": float(epoch + 1),
+                "epoch/global_step": float(global_step),
+                "epoch/time_s": train_time,
+                "epoch/train/lr": scheduler.get_last_lr()[0],
+                "epoch/train/samples": float(len(train_ds)),
+                "epoch/val/samples": float(len(val_ds)),
+                "epoch/is_best": float(is_best),
+                "best/epoch": float(best_epoch),
+                "best/val/acc_expression": best_acc,
+                "best/val/loss": best_val_loss,
+                "best/val/loss_epoch": float(best_val_loss_epoch),
+                "epoch/gap/acc_expression": train_metrics["acc_expression"] - val_metrics["acc_expression"],
+                "epoch/gap/loss": train_metrics["loss"] - val_metrics["loss"],
+                "early_stop/patience": float(early_stop_patience),
+                "early_stop/stale_epochs": float(epochs_without_improve),
+                "early_stop/triggered": float(early_stop_triggered),
+                **prefix_metrics("epoch/train/", train_metrics),
+                **prefix_metrics("epoch/val/", val_metrics),
             },
             step=global_step,
         )
@@ -906,7 +971,10 @@ def main() -> None:
             )
             maybe_log_metrics(
                 accelerator,
-                {f"test/{k}": v for k, v in test_metrics.items()},
+                {
+                    "epoch/test/samples": float(len(test_ds)),
+                    **prefix_metrics("epoch/test/", test_metrics),
+                },
                 step=global_step,
             )
 
@@ -921,6 +989,9 @@ def main() -> None:
                 "total_epochs": cfg.train.epochs,
                 "global_step": global_step,
                 "best_val_acc": best_acc,
+                "best_epoch": best_epoch,
+                "best_val_loss": best_val_loss,
+                "best_val_loss_epoch": best_val_loss_epoch,
                 "is_best": is_best,
                 "epochs_without_improve": epochs_without_improve,
                 "early_stop_patience": early_stop_patience,
@@ -955,6 +1026,9 @@ def main() -> None:
                 metrics=val_metrics,
                 is_best=is_best,
                 best_acc=best_acc,
+                best_epoch=best_epoch,
+                best_val_loss=best_val_loss,
+                best_val_loss_epoch=best_val_loss_epoch,
                 epochs_without_improve=epochs_without_improve,
                 early_stop_patience=early_stop_patience,
                 early_stop_triggered=early_stop_triggered,
@@ -1031,6 +1105,9 @@ def save_checkpoint(
     metrics: dict[str, float],
     is_best: bool,
     best_acc: float,
+    best_epoch: int,
+    best_val_loss: float,
+    best_val_loss_epoch: int,
     epochs_without_improve: int,
     early_stop_patience: int,
     early_stop_triggered: bool,
@@ -1055,6 +1132,9 @@ def save_checkpoint(
         "global_step": global_step,
         "metrics": metrics,
         "best_acc": best_acc,
+        "best_epoch": best_epoch,
+        "best_val_loss": best_val_loss,
+        "best_val_loss_epoch": best_val_loss_epoch,
         "epochs_without_improve": epochs_without_improve,
         "early_stop_patience": early_stop_patience,
         "early_stop_triggered": early_stop_triggered,
