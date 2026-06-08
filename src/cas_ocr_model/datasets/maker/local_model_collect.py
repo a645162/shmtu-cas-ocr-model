@@ -102,6 +102,8 @@ def worker_main(
     args: argparse.Namespace,
     counter: Any,
     counter_lock: Any,
+    stats: Any,
+    stats_lock: Any,
     final_total: int,
     output_dir_str: str,
     progress_q: Any,
@@ -130,10 +132,10 @@ def worker_main(
         _log("info", "backend ready -> pytorch_v2")
         backend.warmup()
 
-        saved = rejected = errors = attempts = 0
+        saved = rejected = errors = attempts = incorrect = failures = correct = 0
 
         async def loop() -> None:
-            nonlocal saved, rejected, errors, attempts
+            nonlocal saved, rejected, errors, attempts, incorrect, failures, correct
             auth = EpayAuth()
             try:
                 while True:
@@ -148,8 +150,27 @@ def worker_main(
                     attempts += 1
                     if verification.status == "error":
                         errors += 1
+                        with stats_lock:
+                            stats["error"] += 1
+                            stats["attempts"] += 1
+                    elif verification.status == "incorrect":
+                        incorrect += 1
+                        rejected += 1
+                        with stats_lock:
+                            stats["incorrect"] += 1
+                            stats["attempts"] += 1
+                    elif verification.status == "failure":
+                        failures += 1
+                        rejected += 1
+                        with stats_lock:
+                            stats["failure"] += 1
+                            stats["attempts"] += 1
                     elif verification.status != "correct" or verification.hit is None or verification.image_bytes is None:
                         rejected += 1
+                        failures += 1
+                        with stats_lock:
+                            stats["failure"] += 1
+                            stats["attempts"] += 1
                     else:
                         wrote = save_verified_sample(
                             backend.name,
@@ -160,12 +181,20 @@ def worker_main(
                             output_dir,
                         )
                         if wrote:
+                            correct += 1
                             saved += 1
+                            with stats_lock:
+                                stats["correct"] += 1
+                                stats["saved"] += 1
+                                stats["attempts"] += 1
                             _log(
                                 "info",
                                 f"saved expr='{verification.hit.expression}' "
                                 f"answer={verification.hit.answer} verify={verification.variant}",
                             )
+                        else:
+                            with stats_lock:
+                                stats["attempts"] += 1
                     if args.throttle > 0:
                         await asyncio.sleep(args.throttle)
                     if attempts % 200 == 0:
@@ -177,7 +206,8 @@ def worker_main(
         asyncio.run(loop())
         _log(
             "info",
-            f"done saved={saved} rejected={rejected} errors={errors} attempts={attempts}",
+            f"done saved={saved} correct={correct} incorrect={incorrect} "
+            f"failure={failures} errors={errors} rejected={rejected} attempts={attempts}",
         )
     except KeyboardInterrupt:
         _log("warn", "KeyboardInterrupt")
@@ -208,6 +238,17 @@ def main() -> None:
     mgr = ctx.Manager()
     counter = mgr.Value("i", start_idx)
     counter_lock = mgr.Lock()
+    stats = mgr.dict(
+        {
+            "correct": 0,
+            "incorrect": 0,
+            "failure": 0,
+            "error": 0,
+            "saved": 0,
+            "attempts": 0,
+        }
+    )
+    stats_lock = mgr.Lock()
     progress_q: Any = mgr.Queue()
 
     progress_ctx: Any = None
@@ -258,7 +299,18 @@ def main() -> None:
     workers = [
         ctx.Process(
             target=worker_main,
-            args=(i, gpu_id, args, counter, counter_lock, final_total, str(output_dir), progress_q),
+            args=(
+                i,
+                gpu_id,
+                args,
+                counter,
+                counter_lock,
+                stats,
+                stats_lock,
+                final_total,
+                str(output_dir),
+                progress_q,
+            ),
             name=f"collect-gpu{gpu_id}",
         )
         for i, gpu_id in enumerate(gpu_ids)
@@ -299,8 +351,18 @@ def main() -> None:
             eta_str_value = format_eta(
                 (max(0, args.count - new_this_run) / rate) if rate > 0 else -1.0
             )
+            correct = int(stats["correct"])
+            incorrect = int(stats["incorrect"])
+            failure = int(stats["failure"])
+            error = int(stats["error"])
+            attempts = int(stats["attempts"])
+            denom = correct + incorrect
+            accuracy = (correct / denom) if denom > 0 else 0.0
             info_str = (
                 f"new={new_this_run}/{args.count} "
+                f"acc={accuracy * 100:.2f}% "
+                f"ok={correct} err={incorrect} "
+                f"fail={failure} exc={error} "
                 f"rate={rate:.1f}/s "
                 f"manual_eta={eta_str_value} "
                 f"gpus={','.join(gpu_ids)}"
@@ -318,6 +380,8 @@ def main() -> None:
                 print(
                     f"[local-collect] progress={current}/{final_total} "
                     f"(this_run={new_this_run}/{args.count}, {100 * new_this_run / args.count:.1f}%) "
+                    f"acc={accuracy * 100:.2f}% correct={correct} incorrect={incorrect} "
+                    f"failure={failure} error={error} attempts={attempts} "
                     f"rate={period_rate:.1f}/s eta={eta_str_value}",
                     flush=True,
                 )
@@ -344,10 +408,19 @@ def main() -> None:
     elapsed_total = time.monotonic() - boot_time
     new_total = counter.value - start_idx
     avg_rate = new_total / max(1e-6, elapsed_total)
+    correct = int(stats["correct"])
+    incorrect = int(stats["incorrect"])
+    failure = int(stats["failure"])
+    error = int(stats["error"])
+    attempts = int(stats["attempts"])
+    denom = correct + incorrect
+    accuracy = (correct / denom) if denom > 0 else 0.0
     print(
         f"[local-collect] done written={counter.value}/{final_total} "
         f"(this_run={new_total}/{args.count}) elapsed={elapsed_total:.1f}s "
-        f"avg_rate={avg_rate:.1f}/s output={output_dir}",
+        f"avg_rate={avg_rate:.1f}/s acc={accuracy * 100:.2f}% "
+        f"correct={correct} incorrect={incorrect} failure={failure} error={error} "
+        f"attempts={attempts} output={output_dir}",
         flush=True,
     )
 
