@@ -65,11 +65,36 @@ train:
   # resume_from: ./runs/8gpu_ddp/last.pt   # 可选: 断点续训路径
 
 loss:
+  # total_loss =
+  #   weight_digit_left * loss_digit_left
+  # + weight_operator * loss_operator
+  # + weight_digit_right * loss_digit_right
+  # + weight_slot_order * loss_slot_order
+  # + weight_slot_overlap * loss_slot_overlap
+  # + weight_slot_right_boundary * loss_slot_right_boundary   (enable_slot_right_boundary=true 时)
+  # + weight_slot_attention_variance * loss_slot_attention_variance (enable_slot_attention_variance=true 时)
+  #
+  # 若 enable_operator_class_balance=true:
+  #   loss_operator 内部会再乘 operator_class_weights[class_id]
+
   weight_digit_left: 1.0           # 左数字分类损失权重
   weight_operator: 1.0             # 运算符分类损失权重
   weight_digit_right: 1.0          # 右数字分类损失权重
+
   label_smoothing: 0.05            # 建议 0.0 ~ 0.1
   focal_gamma: 0.0                 # 关闭 focal; 难样本多时可试 1.0 / 2.0
+
   weight_slot_order: 0.1           # 槽位顺序约束权重
   weight_slot_overlap: 0.05        # 槽位重叠惩罚权重
   slot_margin: 0.10                # 槽位中心最小间距
+
+  enable_slot_right_boundary: true    # 第三个槽位是否限制在 '=' 左侧
+  weight_slot_right_boundary: 0.01    # 温和启用, 影响稍小
+  slot_right_boundary_max: 0.68       # 第三个槽位中心允许的最右边界
+
+  enable_slot_attention_variance: true   # 是否限制 attention 过散
+  weight_slot_attention_variance: 0.005  # 温和启用, 影响稍小
+  slot_attention_max_variance: 0.035     # 单个槽位 attention 方差上界
+
+  enable_operator_class_balance: true    # 是否给 operator head 加类别权重
+  operator_class_weights: [1.0, 1.05, 1.1] # 轻微类别平衡, 顺序与 OPERATOR_LABELS 一致

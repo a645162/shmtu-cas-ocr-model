@@ -774,10 +774,21 @@ def main() -> None:
             digit_right=cfg.loss.weight_digit_right,
             slot_order=cfg.loss.weight_slot_order,
             slot_overlap=cfg.loss.weight_slot_overlap,
+            slot_right_boundary=(
+                cfg.loss.weight_slot_right_boundary if cfg.loss.enable_slot_right_boundary else 0.0
+            ),
+            slot_attention_variance=(
+                cfg.loss.weight_slot_attention_variance if cfg.loss.enable_slot_attention_variance else 0.0
+            ),
         ),
         label_smoothing=cfg.loss.label_smoothing,
         focal_gamma=cfg.loss.focal_gamma,
         slot_margin=cfg.loss.slot_margin,
+        slot_right_boundary_max=cfg.loss.slot_right_boundary_max,
+        slot_attention_max_variance=cfg.loss.slot_attention_max_variance,
+        operator_class_weights=(
+            cfg.loss.operator_class_weights if cfg.loss.enable_operator_class_balance else None
+        ),
     )
 
     # 8 卡 DDP 建议: lr * world_size 线性缩放; 让用户用 --learning-rate 自行缩放,
@@ -856,7 +867,8 @@ def main() -> None:
         accelerator.print(
             f"[resume] from {cfg.train.resume_from} epoch={start_epoch} "
             f"best={best_acc:.4f} best_epoch={best_epoch} "
-            f"best_val_loss={best_val_loss:.4f} stale_epochs={epochs_without_improve}"
+            f"best_val_loss={best_val_loss:.4f} best_val_loss_epoch={best_val_loss_epoch} "
+            f"stale_epochs={epochs_without_improve}"
         )
     elif metrics_history:
         inferred_best_acc, inferred_stale_epochs, inferred_best_epoch = infer_early_stop_state(metrics_history)
@@ -927,7 +939,9 @@ def main() -> None:
             f"val_loss={val_metrics['loss']:.4f} "
             f"val_acc_full={val_metrics['acc_expression']:.4f} "
             f"time={train_time:.1f}s "
-            f"best_val_acc={best_acc:.4f} "
+            f"best_val_acc={best_acc:.4f}@{best_epoch} "
+            f"best_val_loss={best_val_loss:.4f}@{best_val_loss_epoch} "
+            f"is_best={is_best} "
             f"stale_epochs={epochs_without_improve}"
         )
         maybe_log_metrics(

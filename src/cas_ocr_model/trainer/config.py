@@ -176,6 +176,30 @@ class LossConfig:
     slot_margin: float = 0.10
     """槽位中心最小间距, 取值范围基于归一化宽度坐标 [0, 1]."""
 
+    enable_slot_right_boundary: bool = False
+    """是否启用第三个槽位的右边界约束, 防止盯到 '=' 和结果区域."""
+
+    weight_slot_right_boundary: float = 0.02
+    """第三个槽位右边界约束权重."""
+
+    slot_right_boundary_max: float = 0.68
+    """第三个槽位中心允许的最右边界 (归一化坐标)."""
+
+    enable_slot_attention_variance: bool = False
+    """是否启用槽位注意力方差上界约束, 防止 attention 过散."""
+
+    weight_slot_attention_variance: float = 0.01
+    """槽位注意力方差约束权重."""
+
+    slot_attention_max_variance: float = 0.035
+    """单个槽位 attention 宽度方差的上界阈值."""
+
+    enable_operator_class_balance: bool = False
+    """是否对 operator head 启用类别权重."""
+
+    operator_class_weights: list[float] = field(default_factory=lambda: [1.0, 1.0, 1.0])
+    """operator head 的类别权重, 顺序与 OPERATOR_LABELS 一致."""
+
 
 @dataclass
 class FullConfig:
@@ -246,6 +270,18 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--weight-slot-order", type=float, default=None)
     p.add_argument("--weight-slot-overlap", type=float, default=None)
     p.add_argument("--slot-margin", type=float, default=None)
+    p.add_argument("--enable-slot-right-boundary", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
+    p.add_argument("--weight-slot-right-boundary", type=float, default=None)
+    p.add_argument("--slot-right-boundary-max", type=float, default=None)
+    p.add_argument("--enable-slot-attention-variance", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
+    p.add_argument("--weight-slot-attention-variance", type=float, default=None)
+    p.add_argument("--slot-attention-max-variance", type=float, default=None)
+    p.add_argument("--enable-operator-class-balance", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
+    p.add_argument(
+        "--operator-class-weights",
+        type=lambda v: [float(s.strip()) for s in v.split(",") if s.strip()],
+        default=None,
+    )
 
     return p.parse_args(argv)
 
