@@ -42,6 +42,12 @@ log_every_n_steps = 20             # 日志打印间隔
 save_every_n_epochs = 1            # checkpoint 保存间隔
 mixed_precision = "fp16"           # 可选: "fp16" / "bf16" / "no"
 gradient_accumulation_steps = 1    # 梯度累积步数
+report_to = "none"                 # 可选: "none" / "wandb"
+tracker_project_name = "cas-ocr-train"
+use_rich_progress = true           # 主进程 TTY 显示 rich 进度条
+# wandb_run_name = "mobile-small-exp1"
+# wandb_entity = "your-team"
+# wandb_tags = ["ddp", "captcha", "mobilenet"]
 # resume_from = "./runs/mobile_small/last.pt"
 
 [loss]

@@ -132,6 +132,24 @@ class TrainConfig:
     resume_from: Optional[str] = None
     """checkpoint 路径, 断点续训."""
 
+    report_to: str = "none"
+    """实验跟踪后端: none / wandb / 逗号分隔列表 / all."""
+
+    tracker_project_name: str = "cas-ocr-train"
+    """accelerate tracker project 名称."""
+
+    wandb_run_name: Optional[str] = None
+    """可选 wandb run name."""
+
+    wandb_entity: Optional[str] = None
+    """可选 wandb entity / team."""
+
+    wandb_tags: list[str] = field(default_factory=list)
+    """可选 wandb tags."""
+
+    use_rich_progress: bool = True
+    """主进程使用 rich 进度条; 非 TTY 环境自动回退文本日志."""
+
 
 @dataclass
 class LossConfig:
@@ -207,6 +225,16 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--mixed-precision", type=str, default=None)
     p.add_argument("--gradient-accumulation-steps", type=int, default=None)
     p.add_argument("--resume-from", type=str, default=None)
+    p.add_argument("--report-to", type=str, default=None)
+    p.add_argument("--tracker-project-name", type=str, default=None)
+    p.add_argument("--wandb-run-name", type=str, default=None)
+    p.add_argument("--wandb-entity", type=str, default=None)
+    p.add_argument(
+        "--wandb-tags",
+        type=lambda v: [s.strip() for s in v.split(",") if s.strip()],
+        default=None,
+    )
+    p.add_argument("--use-rich-progress", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
 
     # loss
     p.add_argument("--label-smoothing", type=float, default=None)

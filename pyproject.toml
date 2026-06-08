@@ -28,6 +28,11 @@ dependencies = [
     "tomli; python_version < '3.11'",
 ]
 
+[project.optional-dependencies]
+wandb = [
+    "wandb>=0.17",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["cas_ocr_model*"]

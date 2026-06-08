@@ -73,6 +73,15 @@ torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
     --data-root /path/to/dataset --output-dir ./runs/exp1 \
     --epochs 30 --per-device-batch-size 256 --learning-rate 8e-3 \
     --mixed-precision fp16 --label-smoothing 0.05
+
+# 接入 wandb
+accelerate launch --num_processes 8 --mixed_precision fp16 \
+    -m cas_ocr_model.trainer.train \
+    --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml \
+    --report-to wandb \
+    --tracker-project-name cas-ocr-train \
+    --wandb-run-name mobilenet-ddp-exp1 \
+    --wandb-tags ddp,captcha,mobilenet
 ```
 
 要点:
@@ -84,6 +93,22 @@ torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
 * **AdamW** + 1e-4 weight decay
 * **ImageNet 预训练 backbone** (`resnet18` 或 `resnet34`)
 * **标签平滑** 0.05
+* **主进程 rich 进度条**: 交互式终端显示 step/loss/acc/lr/吞吐, 非 TTY 自动回退文本日志
+* **DDP 全局聚合日志**: train/val/test 指标按所有 rank 汇总, 可直接用于 console 和 wandb
+
+## wandb
+
+安装:
+
+```bash
+pip install -e .[wandb]
+```
+
+说明:
+* `--report-to wandb` 开启后, 训练会通过 `accelerate` tracker 自动只在主进程写 wandb
+* `--tracker-project-name` 控制 project 名称
+* `--wandb-run-name` / `--wandb-entity` / `--wandb-tags` 用于附加 run 元数据
+* 若未安装 `wandb` 但显式开启了 `--report-to wandb`, 训练会直接报清晰错误
 
 ## 评估
 

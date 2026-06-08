@@ -55,6 +55,12 @@ train:
   save_every_n_epochs: 1           # checkpoint 保存间隔
   mixed_precision: fp16            # 与用户偏好对齐 (A100/H100/RTX40 也都支持)
   gradient_accumulation_steps: 1   # 梯度累积步数
+  report_to: none                  # 可选: none / wandb
+  tracker_project_name: cas-ocr-train # accelerate tracker project
+  # wandb_run_name: mobilenet-ddp-exp1
+  # wandb_entity: your-team
+  # wandb_tags: [ddp, captcha, mobilenet]
+  use_rich_progress: true          # 主进程 TTY 显示 rich 进度条
   # resume_from: ./runs/8gpu_ddp/last.pt   # 可选: 断点续训路径
 
 loss:
