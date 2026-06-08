@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/env.sh"
 
-COUNT="${COUNT:-500000}"
+COUNT="${COUNT:-10_0000}"
 CHECKPOINT="${CHECKPOINT:-$SHMTU_RUN_DIR/best.pt}"
 OUTPUT="${OUTPUT:-$SHMTU_DATASET_ROOT}"
 WEIGHTS_DIR="${WEIGHTS_DIR:-$SHMTU_WEIGHTS_DIR}"
