@@ -32,6 +32,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--throttle", type=float, default=0.0, help="每次验证后 sleep 秒数")
     p.add_argument("--report-interval", type=float, default=5.0, help="主进程兜底日志间隔")
     p.add_argument(
+        "--skip-save-zero-answer-correct",
+        action="store_true",
+        help="当识别结果 answer=0 且验证码验证正确时, 计入 correct 但不保存样本",
+    )
+    p.add_argument(
         "--resume",
         action="store_true",
         help="显式声明续采模式 (默认行为也是续采, 仅用于日志审计)",
@@ -44,6 +49,12 @@ def parse_gpu_ids(raw: str) -> list[str]:
     if not gpu_ids:
         raise SystemExit("--gpu-ids 不能为空")
     return gpu_ids
+
+
+def is_zero_answer(answer: str | None) -> bool:
+    if answer is None:
+        return False
+    return answer.strip() == "0"
 
 
 def save_verified_sample(
@@ -132,10 +143,10 @@ def worker_main(
         _log("info", "backend ready -> pytorch_v2")
         backend.warmup()
 
-        saved = rejected = errors = attempts = incorrect = failures = correct = 0
+        saved = rejected = errors = attempts = incorrect = failures = correct = skipped_zero = 0
 
         async def loop() -> None:
-            nonlocal saved, rejected, errors, attempts, incorrect, failures, correct
+            nonlocal saved, rejected, errors, attempts, incorrect, failures, correct, skipped_zero
             auth = EpayAuth()
             try:
                 while True:
@@ -171,6 +182,21 @@ def worker_main(
                         with stats_lock:
                             stats["failure"] += 1
                             stats["attempts"] += 1
+                    elif (
+                        args.skip_save_zero_answer_correct
+                        and is_zero_answer(verification.hit.answer)
+                    ):
+                        correct += 1
+                        skipped_zero += 1
+                        with stats_lock:
+                            stats["correct"] += 1
+                            stats["skipped_zero_correct"] += 1
+                            stats["attempts"] += 1
+                        _log(
+                            "info",
+                            f"skip-save-zero expr='{verification.hit.expression}' "
+                            f"answer={verification.hit.answer} verify={verification.variant}",
+                        )
                     else:
                         wrote = save_verified_sample(
                             backend.name,
@@ -207,7 +233,8 @@ def worker_main(
         _log(
             "info",
             f"done saved={saved} correct={correct} incorrect={incorrect} "
-            f"failure={failures} errors={errors} rejected={rejected} attempts={attempts}",
+            f"failure={failures} errors={errors} rejected={rejected} "
+            f"skipped_zero={skipped_zero} attempts={attempts}",
         )
     except KeyboardInterrupt:
         _log("warn", "KeyboardInterrupt")
@@ -245,6 +272,7 @@ def main() -> None:
             "failure": 0,
             "error": 0,
             "saved": 0,
+            "skipped_zero_correct": 0,
             "attempts": 0,
         }
     )
@@ -355,6 +383,7 @@ def main() -> None:
             incorrect = int(stats["incorrect"])
             failure = int(stats["failure"])
             error = int(stats["error"])
+            skipped_zero = int(stats["skipped_zero_correct"])
             attempts = int(stats["attempts"])
             denom = correct + incorrect
             accuracy = (correct / denom) if denom > 0 else 0.0
@@ -362,6 +391,7 @@ def main() -> None:
                 f"new={new_this_run}/{args.count} "
                 f"acc={accuracy * 100:.2f}% "
                 f"ok={correct} err={incorrect} "
+                f"skip0={skipped_zero} "
                 f"fail={failure} exc={error} "
                 f"rate={rate:.1f}/s "
                 f"manual_eta={eta_str_value} "
@@ -381,7 +411,7 @@ def main() -> None:
                     f"[local-collect] progress={current}/{final_total} "
                     f"(this_run={new_this_run}/{args.count}, {100 * new_this_run / args.count:.1f}%) "
                     f"acc={accuracy * 100:.2f}% correct={correct} incorrect={incorrect} "
-                    f"failure={failure} error={error} attempts={attempts} "
+                    f"skip0={skipped_zero} failure={failure} error={error} attempts={attempts} "
                     f"rate={period_rate:.1f}/s eta={eta_str_value}",
                     flush=True,
                 )
@@ -412,6 +442,7 @@ def main() -> None:
     incorrect = int(stats["incorrect"])
     failure = int(stats["failure"])
     error = int(stats["error"])
+    skipped_zero = int(stats["skipped_zero_correct"])
     attempts = int(stats["attempts"])
     denom = correct + incorrect
     accuracy = (correct / denom) if denom > 0 else 0.0
@@ -419,7 +450,8 @@ def main() -> None:
         f"[local-collect] done written={counter.value}/{final_total} "
         f"(this_run={new_total}/{args.count}) elapsed={elapsed_total:.1f}s "
         f"avg_rate={avg_rate:.1f}/s acc={accuracy * 100:.2f}% "
-        f"correct={correct} incorrect={incorrect} failure={failure} error={error} "
+        f"correct={correct} incorrect={incorrect} skip0={skipped_zero} "
+        f"failure={failure} error={error} "
         f"attempts={attempts} output={output_dir}",
         flush=True,
     )

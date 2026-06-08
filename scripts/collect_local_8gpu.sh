@@ -22,6 +22,7 @@ WEIGHTS_DIR="${WEIGHTS_DIR:-$SHMTU_WEIGHTS_DIR}"
 THROTTLE="${THROTTLE:-0.0}"
 REPORT_INTERVAL="${REPORT_INTERVAL:-5.0}"
 GPU_IDS="${GPU_IDS:-}"
+SKIP_SAVE_ZERO_ANSWER_CORRECT="${SKIP_SAVE_ZERO_ANSWER_CORRECT:-1}"
 
 if [ ! -f "$CHECKPOINT" ]; then
     echo "[collect-local-8gpu] checkpoint 不存在: $CHECKPOINT"
@@ -41,6 +42,7 @@ echo "[collect-local-8gpu] output=$OUTPUT"
 echo "[collect-local-8gpu] count=$COUNT"
 echo "[collect-local-8gpu] gpu_ids=$GPU_IDS"
 echo "[collect-local-8gpu] throttle=$THROTTLE"
+echo "[collect-local-8gpu] skip_save_zero_answer_correct=$SKIP_SAVE_ZERO_ANSWER_CORRECT"
 
 cd "$SHMTU_MODEL_ROOT"
 cmd=(
@@ -54,5 +56,8 @@ cmd=(
     --report-interval "$REPORT_INTERVAL"
     --resume
 )
+if [ "$SKIP_SAVE_ZERO_ANSWER_CORRECT" = "1" ]; then
+    cmd+=(--skip-save-zero-answer-correct)
+fi
 cmd+=("$@")
 "${cmd[@]}"
