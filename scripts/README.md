@@ -179,6 +179,7 @@ DEVICE=cuda \
 
 训练 run 目录内会额外保存:
 - `last.pt` / `best.pt`
+- `results.csv`
 - `metrics_history.json`
 - `epochs/epoch_0001.json`, `epochs/epoch_0002.json`, ...
 

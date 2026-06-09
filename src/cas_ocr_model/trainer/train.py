@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import math
@@ -445,7 +446,102 @@ def save_epoch_metrics(
     history = upsert_epoch_record(history, record)
     atomic_write_json(epoch_file, record)
     atomic_write_json(history_file, history)
+    save_results_csv(output_dir, record, history)
     return history
+
+
+def flatten_epoch_record_for_csv(
+    record: dict[str, Any],
+    *,
+    prefix: str = "",
+) -> dict[str, Any]:
+    row: dict[str, Any] = {}
+    metric_groups = {"train", "val", "test"}
+    for key, value in record.items():
+        if key == "config":
+            continue
+        full_key = f"{prefix}{key}" if not prefix else f"{prefix}/{key}"
+        if isinstance(value, dict):
+            row.update(flatten_epoch_record_for_csv(value, prefix=full_key))
+            continue
+        if value is None:
+            if key in metric_groups:
+                continue
+            row[full_key] = ""
+            continue
+        if isinstance(value, bool):
+            row[full_key] = int(value)
+            continue
+        row[full_key] = value
+    return row
+
+
+def build_results_csv_rows(history: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]]]:
+    fieldnames: list[str] = []
+    rows: list[dict[str, Any]] = []
+    for record in sorted(history, key=lambda item: int(item.get("epoch", 0))):
+        row = flatten_epoch_record_for_csv(record)
+        rows.append(row)
+        for key in row.keys():
+            if key not in fieldnames:
+                fieldnames.append(key)
+    return fieldnames, rows
+
+
+def rewrite_results_csv(path: Path, history: list[dict[str, Any]]) -> None:
+    fieldnames, rows = build_results_csv_rows(history)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key, "") for key in fieldnames})
+    tmp_path.replace(path)
+
+
+def save_results_csv(
+    output_dir: str | Path,
+    record: dict[str, Any],
+    history: list[dict[str, Any]],
+) -> None:
+    output_dir = Path(output_dir)
+    csv_path = output_dir / "results.csv"
+    row = flatten_epoch_record_for_csv(record)
+
+    if not csv_path.is_file():
+        rewrite_results_csv(csv_path, history)
+        return
+
+    try:
+        with csv_path.open("r", encoding="utf-8", newline="") as fh:
+            reader = csv.DictReader(fh)
+            fieldnames = list(reader.fieldnames or [])
+            last_epoch = 0
+            for existing_row in reader:
+                raw_epoch = existing_row.get("epoch")
+                if raw_epoch in (None, ""):
+                    continue
+                try:
+                    last_epoch = int(float(raw_epoch))
+                except ValueError:
+                    continue
+    except OSError:
+        rewrite_results_csv(csv_path, history)
+        return
+
+    row_keys = list(row.keys())
+    if (
+        fieldnames
+        and set(row_keys).issubset(fieldnames)
+        and int(record["epoch"]) > last_epoch
+    ):
+        with csv_path.open("a", encoding="utf-8", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            writer.writerow({key: row.get(key, "") for key in fieldnames})
+        return
+
+    rewrite_results_csv(csv_path, history)
 
 
 def resolve_early_stop_patience(cfg: FullConfig) -> int:
