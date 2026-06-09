@@ -272,6 +272,80 @@ def format_seconds(seconds: float) -> str:
     return f"{minutes:02d}:{sec:02d}"
 
 
+def styled_metric(value: float, *, style: str, fmt: str = ".4f") -> str:
+    return f"[{style}]{value:{fmt}}[/]"
+
+
+def styled_text(value: str, *, style: str) -> str:
+    return f"[{style}]{value}[/]"
+
+
+def render_epoch_summary(
+    *,
+    epoch: int,
+    total_epochs: int,
+    train_metrics: dict[str, float],
+    train_time: float,
+    nonfinite_events: int,
+    nonfinite_steps: int,
+    nonfinite_epochs: int,
+    val_metrics: dict[str, float] | None = None,
+    best_acc: float | None = None,
+    best_epoch: int | None = None,
+    best_val_loss: float | None = None,
+    best_val_loss_epoch: int | None = None,
+    is_best: bool | None = None,
+    stale_epochs: int | None = None,
+    stop_reason: str | None = None,
+) -> str:
+    parts = [
+        styled_text("[epoch-summary]", style="tag.epoch-summary"),
+        f"epoch={styled_text(f'{epoch}/{total_epochs}', style='bold cyan')}",
+        f"train_loss={styled_metric(train_metrics['loss'], style='bold yellow')}",
+        f"train_acc_full={styled_metric(train_metrics['acc_expression'], style='metric.good')}",
+    ]
+    if val_metrics is not None:
+        parts.extend(
+            [
+                f"val_loss={styled_metric(val_metrics['loss'], style='bold bright_blue')}",
+                f"val_acc_full={styled_metric(val_metrics['acc_expression'], style='metric.good')}",
+            ]
+        )
+    parts.append(f"time={styled_text(f'{train_time:.1f}s', style='bold magenta')}")
+    if best_acc is not None and best_epoch is not None:
+        parts.append(
+            "best_val_acc="
+            f"{styled_metric(best_acc, style='metric.best')}@"
+            f"{styled_text(str(best_epoch), style='metric.best')}"
+        )
+    if best_val_loss is not None and best_val_loss_epoch is not None:
+        parts.append(
+            "best_val_loss="
+            f"{styled_metric(best_val_loss, style='metric.best')}@"
+            f"{styled_text(str(best_val_loss_epoch), style='metric.best')}"
+        )
+    if is_best is not None:
+        parts.append(
+            "is_best="
+            f"{styled_text(str(int(is_best)), style='metric.best' if is_best else 'bold white')}"
+        )
+    if stale_epochs is not None:
+        stale_style = "bold red" if stale_epochs > 0 else "bold green"
+        parts.append(f"stale_epochs={styled_text(str(stale_epochs), style=stale_style)}")
+    parts.append(
+        f"nonfinite_events={styled_text(str(nonfinite_events), style='bold red' if nonfinite_events > 0 else 'bold green')}"
+    )
+    parts.append(
+        f"nonfinite_steps={styled_text(str(nonfinite_steps), style='bold red' if nonfinite_steps > 0 else 'bold green')}"
+    )
+    parts.append(
+        f"nonfinite_epochs={styled_text(str(nonfinite_epochs), style='bold red' if nonfinite_epochs > 0 else 'bold green')}"
+    )
+    if stop_reason:
+        parts.append(f"stop_reason={styled_text(stop_reason, style='bold bright_red')}")
+    return " ".join(parts)
+
+
 def should_use_rich_progress(accelerator: Accelerator, cfg: FullConfig) -> bool:
     """仅主进程且为交互式终端时启用 rich 进度条."""
     return bool(
@@ -1251,16 +1325,17 @@ def main() -> None:
 
         if train_result.stop_reason == NONFINITE_BACKPROP_STEP_STOP:
             stop_reason = train_result.stop_reason
-            console.tag_print(
-                "epoch-summary",
-                f"epoch={epoch + 1}/{cfg.train.epochs} "
-                f"train_loss={train_metrics['loss']:.4f} "
-                f"train_acc_full={train_metrics['acc_expression']:.4f} "
-                f"time={train_time:.1f}s "
-                f"stop_reason={stop_reason} "
-                f"nonfinite_events={train_result.nonfinite_backprop_events} "
-                f"nonfinite_steps={consecutive_nonfinite_backprop_steps} "
-                f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}",
+            console.print(
+                render_epoch_summary(
+                    epoch=epoch + 1,
+                    total_epochs=cfg.train.epochs,
+                    train_metrics=train_metrics,
+                    train_time=train_time,
+                    nonfinite_events=train_result.nonfinite_backprop_events,
+                    nonfinite_steps=consecutive_nonfinite_backprop_steps,
+                    nonfinite_epochs=consecutive_nonfinite_backprop_epochs,
+                    stop_reason=stop_reason,
+                )
             )
             maybe_log_metrics(
                 accelerator,
@@ -1366,21 +1441,23 @@ def main() -> None:
                 f"epoch={epoch + 1} consecutive_epochs={consecutive_nonfinite_backprop_epochs} "
                 f"patience={nonfinite_backprop_epoch_patience}",
             )
-        console.tag_print(
-            "epoch-summary",
-            f"epoch={epoch + 1}/{cfg.train.epochs} "
-            f"train_loss={train_metrics['loss']:.4f} "
-            f"train_acc_full={train_metrics['acc_expression']:.4f} "
-            f"val_loss={val_metrics['loss']:.4f} "
-            f"val_acc_full={val_metrics['acc_expression']:.4f} "
-            f"time={train_time:.1f}s "
-            f"best_val_acc={best_acc:.4f}@{best_epoch} "
-            f"best_val_loss={best_val_loss:.4f}@{best_val_loss_epoch} "
-            f"is_best={is_best} "
-            f"stale_epochs={epochs_without_improve} "
-            f"nonfinite_events={train_result.nonfinite_backprop_events} "
-            f"nonfinite_steps={consecutive_nonfinite_backprop_steps} "
-            f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}",
+        console.print(
+            render_epoch_summary(
+                epoch=epoch + 1,
+                total_epochs=cfg.train.epochs,
+                train_metrics=train_metrics,
+                val_metrics=val_metrics,
+                train_time=train_time,
+                best_acc=best_acc,
+                best_epoch=best_epoch,
+                best_val_loss=best_val_loss,
+                best_val_loss_epoch=best_val_loss_epoch,
+                is_best=is_best,
+                stale_epochs=epochs_without_improve,
+                nonfinite_events=train_result.nonfinite_backprop_events,
+                nonfinite_steps=consecutive_nonfinite_backprop_steps,
+                nonfinite_epochs=consecutive_nonfinite_backprop_epochs,
+            )
         )
         maybe_log_metrics(
             accelerator,
