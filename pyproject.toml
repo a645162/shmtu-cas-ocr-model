@@ -34,6 +34,7 @@ export = [
     "onnx>=1.18",
     "onnxscript>=0.5",
     "onnxconverter-common>=1.14",
+    "onnxruntime",
 ]
 wandb = [
     "wandb>=0.17",
