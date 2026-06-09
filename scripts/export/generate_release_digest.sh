@@ -41,15 +41,10 @@ hash_cmd = os.environ["HASH_CMD"].split()
 
 files = sorted(
     path
-    for subdir in ("onnx", "ncnn", "torchscript")
-    for path in (export_root / subdir).rglob("*")
+    for path in export_root.rglob("*")
     if path.is_file()
     and path.resolve() != digest_file
     and "__pycache__" not in path.parts
-    and not path.name.endswith(".ncnn.param")
-    and not path.name.endswith(".ncnn.bin")
-    and not path.name.endswith(".ncnn.opt.param")
-    and not path.name.endswith(".ncnn.opt.bin")
 )
 
 lines: list[str] = []

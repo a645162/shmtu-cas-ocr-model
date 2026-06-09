@@ -9,8 +9,8 @@
 - `export_ncnn_python.py`: `best.pt -> pnnx.export(...) -> .pt/.param/.bin`
 - `verify_onnx_against_pytorch.py`: 对比 ONNX 与 PyTorch 直接推理的 logits
 - `verify_ncnn_against_pytorch.py`: 对比 ncnn 与 PyTorch 直接推理的 logits
-- `generate_release_digest.sh`: 生成 GitHub Release 用的 `SHA256SUMS.txt`
-- `export_all.sh`: 同时导出 ONNX 和 ncnn, 并刷新 `SHA256SUMS.txt`
+- `generate_release_digest.sh`: 在当前导出目录内生成 GitHub Release 用的 `SHA256SUMS.txt`
+- `export_all.sh`: 同时导出 ONNX 和 ncnn；每个子目录各自刷新自己的 `SHA256SUMS.txt`
 
 ## 常用环境变量
 
@@ -36,11 +36,12 @@ RUN_NCNNOPTIMIZE=0
 
 ```text
 runs/.../export/
-  SHA256SUMS.txt
   onnx/
+    SHA256SUMS.txt
     best.fp16.onnx
     best.fp32.onnx
   ncnn/
+    SHA256SUMS.txt
     best.fp16.pt
     best.fp16.param
     best.fp16.bin

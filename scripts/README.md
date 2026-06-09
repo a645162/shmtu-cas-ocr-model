@@ -43,7 +43,7 @@
 | `export/export_onnx.sh`         | 默认同时导出 `fp16` + `fp32` ONNX | `bash scripts/export/export_onnx.sh` |
 | `export/export_torchscript.sh`  | best.pt → traced TorchScript | `bash scripts/export/export_torchscript.sh` |
 | `export/export_ncnn.sh`         | 默认同时导出 `fp16` + `fp32` ncnn | `bash scripts/export/export_ncnn.sh` |
-| `export/export_all.sh`          | 一次导出 ONNX + ncnn + SHA256SUMS | `bash scripts/export/export_all.sh` |
+| `export/export_all.sh`          | 一次导出 ONNX + ncnn；各子目录分别生成 SHA256SUMS | `bash scripts/export/export_all.sh` |
 | `export/verify_onnx_against_pytorch.py` | 校验 ONNX 与 PyTorch logits 是否一致 | `python scripts/export/verify_onnx_against_pytorch.py ...` |
 | `export/verify_ncnn_against_pytorch.py` | 校验 ncnn 与 PyTorch logits 是否一致 | `python scripts/export/verify_ncnn_against_pytorch.py ...` |
 | `evaluate.sh`                   | 单卡 evaluate (test 集) | `bash scripts/evaluate.sh` |
@@ -68,7 +68,7 @@ bash scripts/train_resume.sh               # 自动检查 latest/last.pt; 未完
 bash scripts/train_new_or_resume.sh        # 无 latest 则新建训练, 否则自动判断续训/退出
 bash scripts/export.sh                      # 导出 ONNX
 bash scripts/export/install_ncnn_tools.sh   # 下载 pnnx / ncnnoptimize
-bash scripts/export/export_all.sh           # 导出 ONNX + ncnn + SHA256SUMS
+bash scripts/export/export_all.sh           # 导出 ONNX + ncnn；onnx/ 和 ncnn/ 各自写 SHA256SUMS
 
 # 3) 评估 + benchmark
 bash scripts/evaluate.sh                    # 算 acc / ECE / 混淆矩阵

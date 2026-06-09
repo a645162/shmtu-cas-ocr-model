@@ -100,7 +100,11 @@ for raw_precision in "${PRECISIONS[@]}"; do
     "$SHMTU_PYTHON" "${ARGS[@]}"
 done
 
-EXPORT_ROOT="$EXPORT_ROOT" \
+EXPORT_ROOT="$EXPORT_DIR" \
 RUN_DIR="$RUN_DIR" \
 CONFIG="$CONFIG" \
     bash "$SCRIPT_DIR/generate_release_digest.sh"
+
+if [ "$EXPORT_DIR" != "$EXPORT_ROOT" ]; then
+    rm -f "$EXPORT_ROOT/SHA256SUMS.txt"
+fi

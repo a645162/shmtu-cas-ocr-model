@@ -27,16 +27,60 @@ from .inference import CaptchaInferencer, InferencerConfig
 
 
 def build_backend(args: argparse.Namespace):
-    from .backends.pytorch_backend import PyTorchBackend
-    return PyTorchBackend(
-        checkpoint=args.checkpoint,
-        backbone=args.backbone,
-        device=args.device,
+    from . import backends
+
+    availability = backends.get_backend_availability()
+    class_name_map = {
+        "pytorch": "PyTorchBackend",
+        "onnx": "OnnxBackend",
+        "ncnn": "NcnnBackend",
+    }
+    backend_class_name = class_name_map[args.backend]
+    missing_dependency = availability[backend_class_name]
+    if missing_dependency is not None:
+        raise SystemExit(
+            f"{args.backend} backend 不可用: 缺少依赖 `{missing_dependency}`"
+        )
+
+    if args.backend == "pytorch":
+        if not args.checkpoint:
+            raise SystemExit("pytorch backend 必须指定 --checkpoint")
+        PyTorchBackend = backends.PyTorchBackend
+        return PyTorchBackend(
+            checkpoint=args.checkpoint,
+            backbone=args.backbone,
+            device=args.device,
+        )
+
+    if args.backend == "onnx":
+        if args.device != "cpu":
+            raise SystemExit("onnx backend 当前只支持 --device cpu")
+        if not args.onnx:
+            raise SystemExit("onnx backend 必须指定 --onnx")
+        OnnxBackend = backends.OnnxBackend
+        return OnnxBackend(
+            onnx_path=args.onnx,
+            device="cpu",
+        )
+
+    if args.device != "cpu":
+        raise SystemExit("ncnn backend 当前只支持 --device cpu")
+    if not args.ncnn_param or not args.ncnn_bin:
+        raise SystemExit("ncnn backend 必须同时指定 --ncnn-param 和 --ncnn-bin")
+    NcnnBackend = backends.NcnnBackend
+    return NcnnBackend(
+        param_path=args.ncnn_param,
+        bin_path=args.ncnn_bin,
+        device="cpu",
     )
 
 
 def common_parser(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--checkpoint", required=True, help="best.pt")
+    p.add_argument("--backend", default="pytorch", choices=["pytorch", "onnx", "ncnn"])
+    p.add_argument("--checkpoint", default=None, help="PyTorch backend 使用的 best.pt")
+    p.add_argument("--onnx", default=None, help="ONNX backend 使用的 .onnx")
+    p.add_argument("--ncnn-param", default=None, help="ncnn backend 使用的 .param")
+    p.add_argument("--ncnn-bin", default=None, help="ncnn backend 使用的 .bin")
     p.add_argument("--backbone", default="resnet18")
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
 
@@ -160,7 +204,7 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         n_samples=args.num_samples,
         warmup=args.warmup,
         batch_sizes=bs_list,
-        backend_name="pytorch",
+        backend_name=args.backend,
     )
     print_report(rpt)
 
