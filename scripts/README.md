@@ -40,6 +40,7 @@
 | `data/split.sh`                 | 物理分割 train/val/test + 写 manifest | `bash scripts/data/split.sh` |
 | `data/split_and_zip_dataset.sh` | 分割并打包数据集 | `bash scripts/data/split_and_zip_dataset.sh` |
 | `training/train.sh`             | 8 卡 DDP 训练 (accelerate launch + fp16) | `bash scripts/training/train.sh` |
+| `training/download_timm_backbone_weight.sh` | 预拉取 timm backbone 的 Hugging Face 预训练权重 | `bash scripts/training/download_timm_backbone_weight.sh` |
 | `training/train_resume.sh`      | 自动续训当前 profile 的最后一个 run; 已完成则退出 | `bash scripts/training/train_resume.sh` |
 | `training/train_new_or_resume.sh` | 无 latest 时新建训练, 未完成则续训, 已完成则退出 | `bash scripts/training/train_new_or_resume.sh` |
 | `export/install_ncnn_tools.sh`  | 下载 ncnn 预编译工具并准备 `pnnx` / `ncnnoptimize` | `bash scripts/export/install_ncnn_tools.sh` |

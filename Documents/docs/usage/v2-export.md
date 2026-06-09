@@ -80,3 +80,5 @@ bash scripts/export/export_all.sh
 2. 从 PyTorch checkpoint (`.pt`) 中还原 `pip list --format=json`，生成对应的 `*.pip-list.json`
 3. 所有 release 资产完成后生成根目录 `SHA256SUMS.txt`
 4. 上传为 Release Assets
+
+生成的 `model-assets.json` 支持多模型发布：顶层 `modellist` 列出所有模型，`models` 中按模型聚合各自的 `pytorch/onnx/ncnn` 资产，`artifacts` 保留平铺结构用于兼容旧脚本。

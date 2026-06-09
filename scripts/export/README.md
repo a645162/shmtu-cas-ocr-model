@@ -56,6 +56,12 @@ runs/.../release/
     mobilenet_v3_small.trislot_decoder.v2_0.fp16.ts.pt   # 仅独立运行 export_torchscript.sh 时默认放这里
 ```
 
+`model-assets.json` 顶层会同时提供:
+
+- `modellist`: 所有模型的 `asset_stem` 列表，适合快速枚举
+- `models`: 每个模型的元数据，以及按 `pytorch/onnx/ncnn -> precision` 分组后的资产树
+- `artifacts`: 向后兼容的平铺资产列表
+
 ## 示例
 
 ```bash

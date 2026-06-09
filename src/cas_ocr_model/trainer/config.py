@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from cas_ocr_model.common.expression import CANONICAL_OPERATOR_LABELS
 from cas_ocr_model.common.preprocess import BINARIZE_MODES
@@ -459,6 +460,14 @@ def _merge_raw_config(cfg: FullConfig, raw: dict) -> FullConfig:
     return cfg
 
 
+def load_from_raw_dict(raw: dict[str, Any] | None) -> FullConfig:
+    """从普通 dict 加载配置, 用于 checkpoint 内嵌 config / JSON 快照."""
+    cfg = FullConfig()
+    if not isinstance(raw, dict):
+        return cfg
+    return _merge_raw_config(cfg, raw)
+
+
 def load_from_yaml(path: str) -> FullConfig:
     """从 YAML 加载. 字段名与 dataclass 字段严格一致."""
     try:
@@ -500,14 +509,38 @@ def load_from_toml(path: str) -> FullConfig:
     return _merge_raw_config(cfg, raw)
 
 
+def load_from_json(path: str) -> FullConfig:
+    """从 JSON 加载配置快照. 兼容 run 目录内保存的 effective config."""
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(f"config file not found: {p}")
+    with p.open("r", encoding="utf-8") as fh:
+        raw = json.load(fh) or {}
+    return load_from_raw_dict(raw)
+
+
+def load_config_from_checkpoint(path: str) -> FullConfig:
+    """从 checkpoint 内嵌 config 恢复 FullConfig."""
+    try:
+        import torch
+    except ImportError as e:
+        raise RuntimeError("从 checkpoint 恢复配置需要先安装 torch") from e
+
+    raw = torch.load(path, map_location="cpu")
+    cfg = raw.get("config", {}) if isinstance(raw, dict) else {}
+    return load_from_raw_dict(cfg)
+
+
 def load_config(path: str) -> FullConfig:
-    """按文件后缀自动加载 YAML / TOML 配置."""
+    """按文件后缀自动加载 YAML / TOML / JSON 配置."""
     suffix = Path(path).suffix.lower()
     if suffix in (".yaml", ".yml"):
         return load_from_yaml(path)
     if suffix == ".toml":
         return load_from_toml(path)
-    raise ValueError(f"unsupported config format: {path} (expected .yaml/.yml/.toml)")
+    if suffix == ".json":
+        return load_from_json(path)
+    raise ValueError(f"unsupported config format: {path} (expected .yaml/.yml/.toml/.json)")
 
 
 def cfg_to_dict(cfg: FullConfig) -> dict:
@@ -524,3 +557,19 @@ def ensure_output_dir(output_dir: str) -> str:
     """rank 0 端调用, 创建目录. 多卡并发时由 accelerate 协调."""
     os.makedirs(output_dir, exist_ok=True)
     return output_dir
+
+
+def write_effective_config_snapshot(
+    cfg: FullConfig,
+    output_dir: str | Path,
+    filename: str = "config.effective.json",
+) -> Path:
+    """把最终生效配置保存到 run 目录, 供后续 infer/eval 直接复用."""
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    snapshot_path = output_path / filename
+    snapshot_path.write_text(
+        json.dumps(cfg_to_dict(cfg), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return snapshot_path

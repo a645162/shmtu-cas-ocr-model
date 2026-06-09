@@ -77,22 +77,76 @@ def build_backend(args: argparse.Namespace):
     )
 
 
+def resolve_defaults_from_checkpoint(args: argparse.Namespace) -> argparse.Namespace:
+    if args.backend != "pytorch" or not args.checkpoint:
+        return args
+
+    try:
+        import torch
+    except ImportError:
+        return args
+
+    raw = torch.load(args.checkpoint, map_location="cpu")
+    cfg = raw.get("config", {}) if isinstance(raw, dict) else {}
+    model_cfg = cfg.get("model", {}) if isinstance(cfg, dict) else {}
+    data_cfg = cfg.get("data", {}) if isinstance(cfg, dict) else {}
+    train_cfg = cfg.get("train", {}) if isinstance(cfg, dict) else {}
+
+    if args.backbone is None:
+        args.backbone = str(model_cfg.get("backbone", "resnet18"))
+    if args.image_size_h is None:
+        args.image_size_h = int(data_cfg.get("image_size_h", 64))
+    if args.image_size_w is None:
+        args.image_size_w = int(data_cfg.get("image_size_w", 192))
+    if args.threshold is None:
+        args.threshold = int(data_cfg.get("threshold", 200))
+    if args.binarize_mode is None:
+        args.binarize_mode = str(data_cfg.get("binarize_mode", "min_channel_otsu"))
+    if args.adaptive_block_size is None:
+        args.adaptive_block_size = int(data_cfg.get("adaptive_block_size", 25))
+    if args.adaptive_c is None:
+        args.adaptive_c = int(data_cfg.get("adaptive_c", 15))
+    if args.batch_size is None:
+        args.batch_size = min(128, int(train_cfg.get("per_device_batch_size", 32)))
+    return args
+
+
+def fill_builtin_defaults(args: argparse.Namespace) -> argparse.Namespace:
+    if args.backbone is None:
+        args.backbone = "resnet18"
+    if args.image_size_h is None:
+        args.image_size_h = 64
+    if args.image_size_w is None:
+        args.image_size_w = 192
+    if args.threshold is None:
+        args.threshold = 200
+    if args.binarize_mode is None:
+        args.binarize_mode = "min_channel_otsu"
+    if args.adaptive_block_size is None:
+        args.adaptive_block_size = 25
+    if args.adaptive_c is None:
+        args.adaptive_c = 15
+    if args.batch_size is None:
+        args.batch_size = 32
+    return args
+
+
 def common_parser(p: argparse.ArgumentParser) -> None:
     p.add_argument("--backend", default="pytorch", choices=["pytorch", "onnx", "ncnn"])
     p.add_argument("--checkpoint", default=None, help="PyTorch backend 使用的 best.pt")
     p.add_argument("--onnx", default=None, help="ONNX backend 使用的 .onnx")
     p.add_argument("--ncnn-param", default=None, help="ncnn backend 使用的 .param")
     p.add_argument("--ncnn-bin", default=None, help="ncnn backend 使用的 .bin")
-    p.add_argument("--backbone", default="resnet18")
+    p.add_argument("--backbone", default=None)
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
 
-    p.add_argument("--image-size-h", type=int, default=64)
-    p.add_argument("--image-size-w", type=int, default=192)
-    p.add_argument("--threshold", type=int, default=200)
-    p.add_argument("--binarize-mode", default="min_channel_otsu")
-    p.add_argument("--adaptive-block-size", type=int, default=25)
-    p.add_argument("--adaptive-c", type=int, default=15)
-    p.add_argument("--batch-size", type=int, default=32)
+    p.add_argument("--image-size-h", type=int, default=None)
+    p.add_argument("--image-size-w", type=int, default=None)
+    p.add_argument("--threshold", type=int, default=None)
+    p.add_argument("--binarize-mode", default=None)
+    p.add_argument("--adaptive-block-size", type=int, default=None)
+    p.add_argument("--adaptive-c", type=int, default=None)
+    p.add_argument("--batch-size", type=int, default=None)
 
 
 def cmd_predict(args: argparse.Namespace) -> int:
@@ -240,6 +294,8 @@ def main() -> None:
     p.add_argument("--batch-sizes", default="1,8,32,128", help="逗号分隔")
 
     args = p.parse_args()
+    args = resolve_defaults_from_checkpoint(args)
+    args = fill_builtin_defaults(args)
 
     if args.mode == "predict":
         if not args.image and not args.dir:

@@ -104,6 +104,7 @@ accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor -
 * **主进程 rich 进度条**: 交互式终端显示 step/loss/acc/lr/吞吐, 非 TTY 自动回退文本日志
 * **DDP 全局聚合日志**: train/val/test 指标按所有 rank 汇总, 可直接用于 console 和 wandb
 * **断点续训**: `--resume-from last.pt` 会恢复 model / optimizer / scheduler / global_step / best_acc / early-stop 计数
+* **run 配置快照**: 每个 run 启动时都会写 `output_dir/config.effective.json`, 保存最终生效配置 (配置文件 + 环境变量 + CLI 覆盖后的结果)
 * **逐 epoch 指标落盘**: 每轮都会写 `output_dir/results.csv`、`output_dir/epochs/epoch_XXXX.json`，并维护 `output_dir/metrics_history.json`
 * **wandb 自动探测**: `report_to=auto` 时, 若已安装 `wandb` 且环境变量未禁用, 启动训练时会自动接入
 

@@ -23,6 +23,13 @@
 #   SHMTU_DYNAMO_BACKEND    accelerate dynamo backend, 默认 inductor; 可设为 no 回退
 #   SHMTU_MIXED_PRECISION   accelerate mixed precision, 默认 bf16; 可设为 fp16 / no
 
+# Mirrors
+# export HF_ENDPOINT=https://hf-mirror.com
+
+# Proxy
+# export HTTP_PROXY="${HTTP_PROXY:-}"
+# export HTTPS_PROXY="${HTTPS_PROXY:-}"
+
 # ---- 模型根 / src ----
 export SHMTU_MODEL_ROOT="${SHMTU_MODEL_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 export SHMTU_SRC="${SHMTU_SRC:-$SHMTU_MODEL_ROOT/src}"

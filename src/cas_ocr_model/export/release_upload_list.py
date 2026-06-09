@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+from cas_ocr_model.common.release_manifest import iter_manifest_artifacts
+
 ALLOWED_SUFFIXES = {".pt", ".pth", ".onnx", ".param", ".bin", ".txt", ".json"}
 
 
@@ -32,7 +34,7 @@ def main() -> None:
     raw = json.loads(manifest_path.read_text(encoding="utf-8"))
     uploads: list[tuple[Path, str]] = [(manifest_path, manifest_path.name)]
 
-    for artifact in raw.get("artifacts", []):
+    for artifact in iter_manifest_artifacts(raw):
         for file_info in artifact.get("files", []):
             rel_path = Path(file_info["path"])
             abs_path = resolve_release_path(output_root, rel_path)

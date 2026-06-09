@@ -26,6 +26,7 @@ from cas_ocr_model.common.checkpoint_pip import (
     write_pip_list_json,
 )
 from cas_ocr_model.common.console import tag_print
+from cas_ocr_model.common.release_manifest import build_release_manifest
 from cas_ocr_model.model import inspect_checkpoint
 
 SUPPORTED_ENGINES = ("pytorch", "onnx", "ncnn")
@@ -409,7 +410,7 @@ def main() -> None:
         directory.mkdir(parents=True, exist_ok=True)
 
     used_asset_stems: dict[str, str] = {}
-    model_entries: list[dict[str, Any]] = []
+    resolved_models: list[tuple[Path, dict[str, Any]]] = []
     for checkpoint in checkpoints:
         metadata = inspect_checkpoint(checkpoint)
         asset_stem = metadata["asset_stem"]
@@ -420,13 +421,13 @@ def main() -> None:
                 continue
             raise SystemExit(f"重复的 release asset_stem 且内容不同: {asset_stem}")
         used_asset_stems[asset_stem] = checkpoint_sha256
+        resolved_models.append((checkpoint, metadata))
 
         image_size_h, image_size_w = infer_image_sizes(
             checkpoint,
             override_h=args.image_size_h,
             override_w=args.image_size_w,
         )
-        model_entries.append(metadata)
 
         if args.finalize_only:
             continue
@@ -467,8 +468,7 @@ def main() -> None:
 
     manifest_artifacts: list[dict[str, Any]] = []
     release_files: list[Path] = []
-    for checkpoint in checkpoints:
-        metadata = inspect_checkpoint(checkpoint)
+    for checkpoint, metadata in resolved_models:
         asset_stem = metadata["asset_stem"]
 
         if "pytorch" in engines:
@@ -499,16 +499,10 @@ def main() -> None:
                     }
                 )
 
-    manifest = {
-        "schema_version": 1,
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "models": model_entries,
-        "artifacts": manifest_artifacts,
-        "digests": [],
-    }
+    manifest_digests: list[dict[str, Any]] = []
     if not args.skip_digest:
         digest_path = write_sha256sums(output_root, files=release_files)
-        manifest["digests"].append(
+        manifest_digests.append(
             {
                 "engine": "release",
                 "path": digest_path.relative_to(output_root).as_posix(),
@@ -516,6 +510,14 @@ def main() -> None:
                 "sha256": sha256_file(digest_path),
             }
         )
+
+    manifest = build_release_manifest(
+        model_entries=[metadata for _, metadata in resolved_models],
+        artifacts=manifest_artifacts,
+        digests=manifest_digests,
+        generated_at_utc=datetime.now(timezone.utc).isoformat(),
+        schema_version=2,
+    )
 
     if args.skip_manifest:
         return

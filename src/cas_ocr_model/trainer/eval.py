@@ -21,6 +21,7 @@ from .config import (
     FullConfig,
     apply_env_overrides,
     load_config,
+    load_config_from_checkpoint,
 )
 from .data import CaptchaPairDataset, collate_triple
 from .losses import LossWeights, TriSlotDecoderLoss
@@ -39,7 +40,7 @@ def main() -> None:
     p.add_argument("--mixed-precision", type=str, default=None)
     args = p.parse_args()
 
-    cfg = load_config(args.config) if args.config else FullConfig()
+    cfg = load_config(args.config) if args.config else load_config_from_checkpoint(args.checkpoint)
     cfg = apply_env_overrides(cfg)
     cfg.train.per_device_batch_size = args.per_device_batch_size
     cfg.data.num_workers = args.num_workers

@@ -99,4 +99,6 @@ python -m cas_ocr_model.inference.cli \
 
 ## 预处理一致性
 
-`preprocess.py` 与 `trainer/data.py` 共享同样的二值化阈值 (`200`) 和 resize (默认 `64x192`), 保证训练/推理分布一致。如果训练时改过 `--threshold` / `--image-size-*`, 推理时需传同样参数。
+`preprocess.py` 与 `trainer/data.py` 共享同样的二值化阈值 (`200`) 和 resize (默认 `64x192`)。
+
+PyTorch backend 在提供 `--checkpoint` 时, 会优先从 checkpoint 内嵌 `config` 恢复 `backbone` 与预处理参数 (`image_size_*` / `threshold` / `binarize_mode` / `adaptive_*`)；如果 run 目录里有 `config.effective.json`, 也可以显式拿它做排查或复现。

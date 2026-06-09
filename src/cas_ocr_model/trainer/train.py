@@ -55,6 +55,7 @@ from .config import (
     load_config,
     merge_args_to_config,
     parse_args,
+    write_effective_config_snapshot,
 )
 from .data import CaptchaPairDataset, collate_triple
 from .losses import LossWeights, TriSlotDecoderLoss, compute_accuracy
@@ -68,6 +69,7 @@ from cas_ocr_model.common.checkpoint_pip import (
     extract_checkpoint_pip_list,
     write_pip_list_json,
 )
+from cas_ocr_model.common.release_manifest import build_release_manifest
 
 try:
     from rich.progress import (
@@ -966,6 +968,8 @@ def main() -> None:
     # rank 0 准备输出目录
     if accelerator.is_main_process:
         ensure_output_dir(cfg.train.output_dir)
+        snapshot_path = write_effective_config_snapshot(cfg, cfg.train.output_dir)
+        accelerator.print(f"[config] saved effective config to {snapshot_path}")
     accelerator.wait_for_everyone()
 
     if report_to is not None:
@@ -1725,10 +1729,9 @@ def write_pytorch_release_manifest(
     digest_lines = [f"{sha256_file(path)}  {path.name}" for path in release_files]
     digest_path.write_text("\n".join(digest_lines) + "\n", encoding="utf-8")
     manifest_path = output_dir / "model-assets.json"
-    manifest = {
-        "schema_version": 1,
-        "models": [model_metadata],
-        "artifacts": [
+    manifest = build_release_manifest(
+        model_entries=[model_metadata],
+        artifacts=[
             {
                 **model_metadata,
                 "engine": "pytorch",
@@ -1737,7 +1740,7 @@ def write_pytorch_release_manifest(
                 "files": files,
             }
         ],
-        "digests": [
+        digests=[
             {
                 "engine": "pytorch",
                 "path": digest_path.relative_to(output_dir).as_posix(),
@@ -1745,7 +1748,8 @@ def write_pytorch_release_manifest(
                 "sha256": sha256_file(digest_path),
             }
         ],
-    }
+        schema_version=2,
+    )
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

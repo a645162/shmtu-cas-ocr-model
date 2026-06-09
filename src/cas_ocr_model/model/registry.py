@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping
 import torch
 import torch.nn as nn
 
+from cas_ocr_model.common.release_manifest import iter_manifest_artifacts
 from .backbones import is_supported_backbone, list_available_backbones
 from .versions import MODEL_FAMILY as DEFAULT_MODEL_FAMILY
 from .versions import MODEL_VERSION as DEFAULT_MODEL_VERSION
@@ -156,7 +157,7 @@ def find_release_checkpoint(release_root: str | Path) -> Path:
     manifest_path = root / "model-assets.json"
     if manifest_path.is_file():
         raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-        for artifact in raw.get("artifacts", []):
+        for artifact in iter_manifest_artifacts(raw):
             if artifact.get("engine") != "pytorch":
                 continue
             if artifact.get("precision") != "fp32":
