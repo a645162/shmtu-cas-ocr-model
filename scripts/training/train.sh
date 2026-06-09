@@ -10,7 +10,7 @@ CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
 RESUME_FROM="${RESUME_FROM:-${SHMTU_RESUME_FROM:-}}"
 RESUME="${RESUME:-${SHMTU_RESUME:-0}}"
 AUTO_VIS="${AUTO_VIS:-${SHMTU_AUTO_VIS:-1}}"
-VIS_CHECKPOINT="${VIS_CHECKPOINT:-last.pt}"
+VIS_CHECKPOINT="${VIS_CHECKPOINT:-}"
 VIS_N="${VIS_N:-20}"
 VIS_DEVICE="${VIS_DEVICE:-cuda}"
 
@@ -76,10 +76,19 @@ accelerate launch \
 
 if [ "$AUTO_VIS" = "1" ]; then
     echo "[train] auto vis enabled"
-    CHECKPOINT="$RUN_DIR/$VIS_CHECKPOINT" \
-    OUTPUT_DIR="$RUN_DIR/outputs" \
-    N="$VIS_N" \
-    DEVICE="$VIS_DEVICE" \
-    SUBDIR="auto_test_vis" \
-        bash "$SCRIPT_DIR/../visualization/vis.sh"
+    if [ -n "$VIS_CHECKPOINT" ]; then
+        echo "[train] auto vis checkpoint override: $RUN_DIR/$VIS_CHECKPOINT"
+        CHECKPOINT="$RUN_DIR/$VIS_CHECKPOINT" \
+        OUTPUT_DIR="$RUN_DIR/outputs" \
+        N="$VIS_N" \
+        DEVICE="$VIS_DEVICE" \
+        SUBDIR="auto_test_vis" \
+            bash "$SCRIPT_DIR/../visualization/vis.sh"
+    else
+        OUTPUT_DIR="$RUN_DIR/outputs" \
+        N="$VIS_N" \
+        DEVICE="$VIS_DEVICE" \
+        SUBDIR="auto_test_vis" \
+            bash "$SCRIPT_DIR/../visualization/vis.sh"
+    fi
 fi

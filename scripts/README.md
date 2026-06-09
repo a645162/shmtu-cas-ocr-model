@@ -17,7 +17,8 @@
 | `SHMTU_RUN_DIR` | 空 | 显式指定某个具体 run 目录; 不设时默认解析 profile 下 `latest` |
 | `SHMTU_RESUME` | `0` | 设为 `1` 时从当前 profile/latest 对应 run 的 `last.pt` 续训 |
 | `SHMTU_RESUME_FROM` | 空 | 显式指定训练续训 checkpoint, 优先级高于 `SHMTU_RESUME=1` |
-| `SHMTU_AUTO_VIS` | `1` | 训练结束后自动运行 `vis.sh`，默认用 `last.pt` 从 test split 生成可视化 |
+| `SHMTU_AUTO_VIS` | `1` | 训练结束后自动运行 `vis.sh`，默认与手动执行一致，优先使用 `release/pytorch` 中的发布权重，否则回退到 `best.pt` |
+| `VIS_CHECKPOINT` | `<unset>` | 可显式覆盖自动可视化使用的 checkpoint 文件名，例如 `best.pt` 或 `last.pt` |
 | `SHMTU_DISABLE_WANDB` | `0` | 设为 `1/true/yes/on` 时禁用训练自动接入 wandb |
 | `SHMTU_DYNAMO_BACKEND` | `inductor` | accelerate 的 dynamo backend; 可设为 `no` 回退到非 compile 路径 |
 | `MAX_FILES` | 空 | `split.sh` 最多使用多少个已配对样本; 会先随机选取再分割 |
