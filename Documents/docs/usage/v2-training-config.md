@@ -51,7 +51,7 @@ train:
   weight_decay: 1.0e-4
   warmup_ratio: 0.05
   grad_clip: 1.0
-  mixed_precision: fp16
+  mixed_precision: bf16
   report_to: auto
   use_rich_progress: true
 

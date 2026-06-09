@@ -1,9 +1,9 @@
-"""accelerate 训练入口: 8 卡 DDP + fp16 + 线性 warmup + AdamW.
+"""accelerate 训练入口: 8 卡 DDP + mixed precision + 线性 warmup + AdamW.
 
 调用方式 (任选其一):
 
 1) accelerate launch:
-   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision fp16 \\
+   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision bf16 \\
        -m cas_ocr_model.trainer.train \\
        --data-root ../../../../dataset --output-dir ./runs/exp1
 
@@ -12,7 +12,7 @@
        --data-root ../../../../dataset --output-dir ./runs/exp1
 
 3) YAML/TOML 配置 + CLI 覆盖:
-   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision fp16 \\
+   accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision bf16 \\
        -m cas_ocr_model.trainer.train --config configs/8gpu_ddp.yaml
 
 主进程 (rank 0) 负责:
@@ -49,6 +49,7 @@ from .config import (
     FullConfig,
     NUM_DIGIT_CLASSES,
     NUM_OPERATOR_CLASSES,
+    apply_env_overrides,
     cfg_to_dict,
     ensure_output_dir,
     load_config,
@@ -62,6 +63,11 @@ from cas_ocr_model.model import ModelStats
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 
 from cas_ocr_model.common.console import AcceleratorConsole
+from cas_ocr_model.common.checkpoint_pip import (
+    capture_pip_list_snapshot,
+    extract_checkpoint_pip_list,
+    write_pip_list_json,
+)
 
 try:
     from rich.progress import (
@@ -942,6 +948,7 @@ def main() -> None:
 
     # 1) 配置组装
     cfg = load_config(args.config) if args.config else FullConfig()
+    cfg = apply_env_overrides(cfg)
     cfg = merge_args_to_config(cfg, args)
     report_to, tracker_resolution = resolve_report_to(cfg.train.report_to)
     ensure_wandb_run_name(cfg, report_to)
@@ -1694,10 +1701,29 @@ def write_pytorch_release_manifest(
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     digest_path = checkpoint_path.parent / "SHA256SUMS.txt"
-    digest_path.write_text(
-        f"{sha256_file(checkpoint_path)}  {checkpoint_path.name}\n",
-        encoding="utf-8",
-    )
+    release_files: list[Path] = [checkpoint_path]
+    files = [
+        {
+            "path": checkpoint_path.relative_to(output_dir).as_posix(),
+            "release_asset_name": checkpoint_path.name,
+            "sha256": sha256_file(checkpoint_path),
+        }
+    ]
+    pip_list = extract_checkpoint_pip_list(torch.load(checkpoint_path, map_location="cpu"))
+    if pip_list is not None:
+        pip_list_path = checkpoint_path.with_name(f"{model_metadata['asset_stem']}.pip-list.json")
+        write_pip_list_json(pip_list_path, pip_list)
+        release_files.append(pip_list_path)
+        files.append(
+            {
+                "path": pip_list_path.relative_to(output_dir).as_posix(),
+                "release_asset_name": pip_list_path.name,
+                "sha256": sha256_file(pip_list_path),
+            }
+        )
+
+    digest_lines = [f"{sha256_file(path)}  {path.name}" for path in release_files]
+    digest_path.write_text("\n".join(digest_lines) + "\n", encoding="utf-8")
     manifest_path = output_dir / "model-assets.json"
     manifest = {
         "schema_version": 1,
@@ -1708,13 +1734,7 @@ def write_pytorch_release_manifest(
                 "engine": "pytorch",
                 "precision": "fp32",
                 "format": "checkpoint",
-                "files": [
-                    {
-                        "path": checkpoint_path.relative_to(output_dir).as_posix(),
-                        "release_asset_name": checkpoint_path.name,
-                        "sha256": sha256_file(checkpoint_path),
-                    }
-                ],
+                "files": files,
             }
         ],
         "digests": [
@@ -1769,6 +1789,12 @@ def save_checkpoint(
     unwrapped = accelerator.unwrap_model(model)
     cfg_dict = cfg_to_dict(cfg)
     model_metadata = build_model_metadata(cfg_dict)
+    try:
+        pip_list, pip_list_metadata = capture_pip_list_snapshot()
+    except Exception as exc:
+        pip_list = None
+        pip_list_metadata = None
+        _console.tag_print("WARN", f"capture pip list failed: {exc}")
     state = {
         "epoch": epoch,
         "model_state_dict": unwrapped.state_dict(),
@@ -1790,6 +1816,9 @@ def save_checkpoint(
         "config": cfg_dict,
         "model_metadata": model_metadata,
     }
+    if pip_list is not None and pip_list_metadata is not None:
+        state["pip_list"] = pip_list
+        state["pip_list_metadata"] = pip_list_metadata
     last_path = output_dir / "last.pt"
     if save_latest:
         accelerator.save(state, str(last_path))

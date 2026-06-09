@@ -11,7 +11,7 @@
 - `verify_ncnn_against_pytorch.py`: 对比 ncnn 与 PyTorch 直接推理的 logits
 - `generate_release_digest.sh`: 在当前导出目录内生成 GitHub Release 用的 `SHA256SUMS.txt`
 - `export_all.sh`: 同时导出 ONNX 和 ncnn；每个子目录各自刷新自己的 `SHA256SUMS.txt`
-- `python -m cas_ocr_model.export.release_bundle`: 批量生成 release 用的 `pytorch/onnx/ncnn + model-assets.json + 根目录 SHA256SUMS.txt`
+- `python -m cas_ocr_model.export.release_bundle`: 批量生成 release 用的 `pytorch/onnx/ncnn + *.pip-list.json + model-assets.json + 根目录 SHA256SUMS.txt`
 
 ## 常用环境变量
 
@@ -41,6 +41,7 @@ runs/.../release/
   SHA256SUMS.txt
   pytorch/
     mobilenet_v3_small.trislot_decoder.v2_0.pt
+    mobilenet_v3_small.trislot_decoder.v2_0.pip-list.json
   onnx/
     mobilenet_v3_small.trislot_decoder.v2_0.fp16.onnx
     mobilenet_v3_small.trislot_decoder.v2_0.fp32.onnx

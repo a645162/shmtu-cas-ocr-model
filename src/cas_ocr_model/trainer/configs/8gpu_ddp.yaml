@@ -1,5 +1,5 @@
 # 8 卡 DDP 训练配置 (CASINO CAPTCHA 3-head)
-# 配合: accelerate launch --num_processes 8 --mixed_precision fp16 \
+# 配合: accelerate launch --num_processes 8 --mixed_precision bf16 \
 #       -m cas_ocr_model.trainer.train --config configs/8gpu_ddp.yaml
 #
 # model.backbone 可选值:
@@ -76,7 +76,8 @@ data:
 
 model:
   version: "2.0"                        # 当前模型版本列表: 2.0
-  backbone: mobilenet_v3_small             # 可选: mobilenet_v3_small / mobilenet_v3_large / mobilenetv3_large_100 / r50 / resnet101 / mobilenetv4_conv_small / mobilenetv4_hybrid_medium / repvgg_a0 / repvgg_b1 / timm/<model_name>
+  # 可选: mobilenet_v3_small / mobilenet_v3_large / mobilenetv3_large_100 / r50 / resnet101 / mobilenetv4_conv_small / mobilenetv4_hybrid_medium / repvgg_a0 / repvgg_b1 / timm/<model_name>
+  backbone: mobilenetv4_conv_small
   pretrained: true               # true=加载 ImageNet 预训练; false=随机初始化
   dropout: 0.2                   # head dropout, 可尝试 0.0 ~ 0.3
   slot_hidden_dim: 256           # head 隐层维度, 可尝试 128 / 256
@@ -96,7 +97,7 @@ train:
   nonfinite_backprop_epoch_patience: 10 # 连续多少个 epoch 出现 NaN/Inf 反传后停训, 0=关闭
   log_every_n_steps: 20            # 日志打印间隔
   save_every_n_epochs: 1           # checkpoint 保存间隔
-  mixed_precision: fp16            # 与用户偏好对齐 (A100/H100/RTX40 也都支持)
+  mixed_precision: bf16            # 默认与 SHMTU_MIXED_PRECISION 保持一致
   gradient_accumulation_steps: 1   # 梯度累积步数
   report_to: auto                  # auto=已安装 wandb 且未被配置/环境禁用时自动启用
   tracker_project_name: cas-ocr-train # accelerate tracker project

@@ -21,7 +21,7 @@
 | `VIS_CHECKPOINT` | `<unset>` | 可显式覆盖自动可视化使用的 checkpoint 文件名，例如 `best.pt` 或 `last.pt` |
 | `SHMTU_DISABLE_WANDB` | `0` | 设为 `1/true/yes/on` 时禁用训练自动接入 wandb |
 | `SHMTU_DYNAMO_BACKEND` | `inductor` | accelerate 的 dynamo backend; 可设为 `no` 回退到非 compile 路径 |
-| `SHMTU_MIXED_PRECISION` | `fp16` | accelerate 的 mixed precision; 可设为 `fp16` / `bf16` / `no` |
+| `SHMTU_MIXED_PRECISION` | `bf16` | accelerate 的 mixed precision; 可设为 `fp16` / `bf16` / `no` |
 | `MAX_FILES` | 空 | `split.sh` 最多使用多少个已配对样本; 会先随机选取再分割 |
 | `CAS_OCR_WEIGHTS_DIR` | `$MODEL_ROOT/weights` | PyTorch 权重缓存 (gitignore) |
 | `CAS_OCR_NUM_GPUS` | `8` | 训练 / 多卡 bench 用的 GPU 数 |

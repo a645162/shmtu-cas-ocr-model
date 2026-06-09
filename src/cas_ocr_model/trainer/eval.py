@@ -19,6 +19,7 @@ from accelerate.utils import set_seed
 from cas_ocr_model.common.console import AcceleratorConsole
 from .config import (
     FullConfig,
+    apply_env_overrides,
     load_config,
 )
 from .data import CaptchaPairDataset, collate_triple
@@ -35,15 +36,17 @@ def main() -> None:
     p.add_argument("--data-root", type=str, default=None)
     p.add_argument("--per-device-batch-size", type=int, default=256)
     p.add_argument("--num-workers", type=int, default=4)
-    p.add_argument("--mixed-precision", type=str, default="fp16")
+    p.add_argument("--mixed-precision", type=str, default=None)
     args = p.parse_args()
 
     cfg = load_config(args.config) if args.config else FullConfig()
+    cfg = apply_env_overrides(cfg)
     cfg.train.per_device_batch_size = args.per_device_batch_size
     cfg.data.num_workers = args.num_workers
     if args.data_root:
         cfg.data.data_root = args.data_root
-    cfg.train.mixed_precision = args.mixed_precision
+    if args.mixed_precision:
+        cfg.train.mixed_precision = args.mixed_precision
 
     accelerator = Accelerator(mixed_precision=cfg.train.mixed_precision)
     set_seed(cfg.train.seed, device_specific=True)

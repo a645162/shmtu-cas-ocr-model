@@ -21,7 +21,7 @@
 #   SHMTU_PYTHON            Python 解释器
 #   SHMTU_DISABLE_WANDB     设为 1/true/yes/on 时禁用训练自动接入 wandb
 #   SHMTU_DYNAMO_BACKEND    accelerate dynamo backend, 默认 inductor; 可设为 no 回退
-#   SHMTU_MIXED_PRECISION   accelerate mixed precision, 默认 fp16; 可设为 bf16 / no
+#   SHMTU_MIXED_PRECISION   accelerate mixed precision, 默认 bf16; 可设为 fp16 / no
 
 # ---- 模型根 / src ----
 export SHMTU_MODEL_ROOT="${SHMTU_MODEL_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -67,7 +67,7 @@ export SHMTU_NUM_GPUS="${SHMTU_NUM_GPUS:-8}"
 export SHMTU_PYTHON="${SHMTU_PYTHON:-python3}"
 # inductor or no
 export SHMTU_DYNAMO_BACKEND="${SHMTU_DYNAMO_BACKEND:-no}"
-export SHMTU_MIXED_PRECISION="${SHMTU_MIXED_PRECISION:-fp16}"
+export SHMTU_MIXED_PRECISION="${SHMTU_MIXED_PRECISION:-bf16}"
 
 # 仓库根 (lib shmtu-cas-python 路径)
 export SHMTU_REPO_ROOT="${SHMTU_REPO_ROOT:-$(cd "$SHMTU_MODEL_ROOT/../.." && pwd)}"

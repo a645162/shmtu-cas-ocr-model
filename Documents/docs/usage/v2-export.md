@@ -77,5 +77,6 @@ bash scripts/export/export_all.sh
 项目配置了 GitHub Actions workflow (`.github/workflows/release-model-assets.yml`)，当创建 GitHub Release 时自动：
 
 1. 并行导出 ONNX (fp16 + fp32) 与 NCNN (param + bin)
-2. 所有 release 资产完成后生成根目录 `SHA256SUMS.txt`
-3. 上传为 Release Assets
+2. 从 PyTorch checkpoint (`.pt`) 中还原 `pip list --format=json`，生成对应的 `*.pip-list.json`
+3. 所有 release 资产完成后生成根目录 `SHA256SUMS.txt`
+4. 上传为 Release Assets

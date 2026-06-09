@@ -48,7 +48,7 @@ python -m cas_ocr_model.trainer.train \
 ```bash
 # 使用 accelerate launch
 accelerate launch --num_processes 8 --num_machines 1 \
-    --dynamo_backend inductor --mixed_precision fp16 \
+    --dynamo_backend inductor --mixed_precision bf16 \
     -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml
 
@@ -64,7 +64,7 @@ torchrun --nproc_per_node=8 \
 |---|---|---|
 | `--per-device-batch-size` | 256 | 单卡批次大小，8 卡 × 256 = 2048 effective |
 | `--learning-rate` | 8e-3 | 线性缩放: 1e-3 × GPU 数 |
-| `--mixed-precision` | fp16 | 混合精度训练 |
+| `--mixed-precision` | bf16 | 混合精度训练 |
 | `--early-stop-patience` | -1 | -1 = 自动取总 epoch 的 20% |
 
 ### 断点续训
@@ -121,7 +121,7 @@ python -m cas_ocr_model.inference --backend ncnn --ncnn-param ./runs/exp1/model.
 ```bash
 pip install -e .[wandb]
 
-accelerate launch --num_processes 8 --mixed_precision fp16 \
+accelerate launch --num_processes 8 --mixed_precision bf16 \
     -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml \
     --report-to wandb \

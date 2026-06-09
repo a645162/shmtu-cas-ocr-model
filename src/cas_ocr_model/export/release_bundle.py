@@ -21,6 +21,10 @@ from typing import Any
 
 import torch
 
+from cas_ocr_model.common.checkpoint_pip import (
+    load_checkpoint_pip_snapshot,
+    write_pip_list_json,
+)
 from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.model import inspect_checkpoint
 
@@ -168,16 +172,29 @@ def copy_pytorch_checkpoint(src: Path, dst: Path) -> dict[str, Any]:
 def collect_pytorch_artifact(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise SystemExit(f"缺少 pytorch release 资产: {path}")
+    files = [
+        {
+            "path": str(path),
+            "sha256": sha256_file(path),
+        }
+    ]
+    pip_list, _ = load_checkpoint_pip_snapshot(path)
+    if pip_list is not None:
+        pip_list_path = path.with_name(f"{path.stem}.pip-list.json")
+        write_pip_list_json(pip_list_path, pip_list)
+        files.append(
+            {
+                "path": str(pip_list_path),
+                "sha256": sha256_file(pip_list_path),
+            }
+        )
+    else:
+        tag_print("release-export", f"checkpoint missing pip_list metadata: {path.name}")
     return {
         "engine": "pytorch",
         "precision": "fp32",
         "format": "checkpoint",
-        "files": [
-            {
-                "path": str(path),
-                "sha256": sha256_file(path),
-            }
-        ],
+        "files": files,
     }
 
 

@@ -29,6 +29,21 @@ OP2IDX = {s: i for i, s in enumerate(OPERATOR_LABELS)}
 
 NUM_DIGIT_CLASSES = len(DIGIT_LABELS)   # 10
 NUM_OPERATOR_CLASSES = len(OPERATOR_LABELS)  # 3
+SHMTU_MIXED_PRECISION_ENV = "SHMTU_MIXED_PRECISION"
+
+
+def resolve_mixed_precision_default() -> str:
+    """统一 mixed precision 默认值来源: 先读 SHMTU_MIXED_PRECISION, 否则回退 bf16."""
+    value = os.environ.get(SHMTU_MIXED_PRECISION_ENV)
+    if value and value.strip():
+        return value.strip().lower()
+    return "bf16"
+
+
+def apply_env_overrides(cfg: "FullConfig") -> "FullConfig":
+    """把环境变量覆盖应用到运行时配置上, 仅处理约定好的公共入口变量."""
+    cfg.train.mixed_precision = resolve_mixed_precision_default()
+    return cfg
 
 
 # ----------------------------------------------------------------------------
@@ -180,8 +195,8 @@ class TrainConfig:
     save_every_n_epochs: int = 1
     """每隔 N epoch 保存一次 (rank 0)."""
 
-    mixed_precision: str = "fp16"
-    """混合精度: 'no' / 'fp16' / 'bf16'. 默认 fp16 (与用户偏好对齐)."""
+    mixed_precision: str = field(default_factory=resolve_mixed_precision_default)
+    """混合精度: 'no' / 'fp16' / 'bf16'. 默认遵循 SHMTU_MIXED_PRECISION, 否则 bf16."""
 
     gradient_accumulation_steps: int = 1
     """梯度累积, 进一步放大 effective batch."""
