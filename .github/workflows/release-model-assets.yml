@@ -36,12 +36,13 @@ jobs:
       - name: Download PyTorch Checkpoints
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.tag.outputs.release-tag }}
         run: |
           set -euo pipefail
           mkdir -p release_checkpoints
-          gh release download "$RELEASE_TAG" --pattern "*.pt" --dir release_checkpoints || true
-          gh release download "$RELEASE_TAG" --pattern "*.pth" --dir release_checkpoints || true
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.pt" --dir release_checkpoints || true
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.pth" --dir release_checkpoints || true
           COUNT="$(find release_checkpoints -maxdepth 1 -type f \( -name '*.pt' -o -name '*.pth' \) | wc -l)"
           if [ "$COUNT" -eq 0 ]; then
             echo "no checkpoint assets found in release $RELEASE_TAG" >&2
