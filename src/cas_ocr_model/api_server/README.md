@@ -23,7 +23,7 @@
 ```bash
 python -m cas_ocr_model.api_server --model-kind v2 --checkpoint runs/exp1/best.pt
 python -m cas_ocr_model.api_server --model-kind v1 --v1-model-dir workdir/Models
-python scripts/run_api_server.py --model-kind v2 --checkpoint runs/exp1/best.pt
+python scripts/api/run_api_server.py --model-kind v2 --checkpoint runs/exp1/best.pt
 ```
 
 ## 默认权重发现

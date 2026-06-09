@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/env.sh"
+source "$SCRIPT_DIR/../env.sh"
 CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
 RESUME_FROM="${RESUME_FROM:-${SHMTU_RESUME_FROM:-}}"
 RESUME="${RESUME:-${SHMTU_RESUME:-0}}"
@@ -81,5 +81,5 @@ if [ "$AUTO_VIS" = "1" ]; then
     N="$VIS_N" \
     DEVICE="$VIS_DEVICE" \
     SUBDIR="auto_test_vis" \
-        bash "$SCRIPT_DIR/vis.sh"
+        bash "$SCRIPT_DIR/../visualization/vis.sh"
 fi

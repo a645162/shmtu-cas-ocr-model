@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/env.sh"
+source "$SCRIPT_DIR/../env.sh"
 
 DATASET_ROOT="${DATASET_ROOT:-$SHMTU_MODEL_ROOT/dataset}"
 ARCHIVE_DIR="${ARCHIVE_DIR:-$SHMTU_MODEL_ROOT/archives}"

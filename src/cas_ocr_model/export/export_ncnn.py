@@ -2,7 +2,7 @@
 """直接使用 pnnx Python API 导出 ncnn.
 
 用法:
-    python scripts/export/export_ncnn_python.py \
+    python -m cas_ocr_model.export.export_ncnn \
         --checkpoint ./runs/exp1/best.pt \
         --output ./runs/exp1/export/ncnn/best.fp16.pt \
         --image-size-h 64 --image-size-w 192

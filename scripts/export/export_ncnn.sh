@@ -210,7 +210,7 @@ for raw_precision in "${PRECISIONS[@]}"; do
             echo "[export-ncnn] output pt   = $python_export_pt"
             echo "[export-ncnn] ncnn param  = $ncnn_param"
             echo "[export-ncnn] ncnn bin    = $ncnn_bin"
-            "$SHMTU_PYTHON" "$SCRIPT_DIR/export_ncnn_python.py" \
+            "$SHMTU_PYTHON" -m cas_ocr_model.export.export_ncnn \
                 --checkpoint "$CHECKPOINT" \
                 --output "$python_export_pt" \
                 --image-size-h "$IMAGE_SIZE_H" \

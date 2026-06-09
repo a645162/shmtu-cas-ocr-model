@@ -6,7 +6,7 @@
 - `export_onnx.sh`: 默认同时导出 `fp16` 和 `fp32` 两份 `.onnx`
 - `export_torchscript.sh`: `best.pt -> traced .ts.pt`
 - `export_ncnn.sh`: 默认同时导出 `fp16` 和 `fp32` 两份 `.param/.bin`，也支持回退到 `TorchScript -> pnnx`
-- `export_ncnn_python.py`: `best.pt -> pnnx.export(...) -> .pt/.param/.bin`
+- `python -m cas_ocr_model.export.export_ncnn`: `best.pt -> pnnx.export(...) -> .pt/.param/.bin`
 - `verify_onnx_against_pytorch.py`: 对比 ONNX 与 PyTorch 直接推理的 logits
 - `verify_ncnn_against_pytorch.py`: 对比 ncnn 与 PyTorch 直接推理的 logits
 - `generate_release_digest.sh`: 在当前导出目录内生成 GitHub Release 用的 `SHA256SUMS.txt`
@@ -84,7 +84,7 @@ RUN_NCNNOPTIMIZE=1 \
     bash scripts/export/export_ncnn.sh
 
 # 直接用 pnnx Python API
-python scripts/export/export_ncnn_python.py \
+python -m cas_ocr_model.export.export_ncnn \
     --checkpoint ./runs/8gpu_ddp/20260608_153000/best.pt \
     --output ./runs/8gpu_ddp/20260608_153000/export/ncnn/best.fp16.pt \
     --image-size-h 64 --image-size-w 192

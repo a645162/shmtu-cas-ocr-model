@@ -3,7 +3,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/env.sh"
+source "$SCRIPT_DIR/../env.sh"
 COUNT="${COUNT:-500000}"
 PROCESSES="${PROCESSES:-4}"
 PER_PROCESS="${PER_PROCESS:-8}"

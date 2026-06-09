@@ -31,14 +31,15 @@
 | 脚本 | 职责 | 典型用法 |
 |---|---|---|
 | `env.sh`                        | 公共环境变量 | `source scripts/env.sh` |
-| `run_path.sh`                   | 创建 / 解析 `runs/{profile}/{date_time}` 与 `latest` | `bash scripts/run_path.sh resolve` |
-| `download_weights.sh`           | 仅下载 PyTorch 权重 (不采集) | `bash scripts/download_weights.sh` |
-| `collect.sh`                    | 启动 maker 采集 jpg+json | `bash scripts/collect.sh` |
-| `split.sh`                      | 物理分割 train/val/test + 写 manifest | `bash scripts/split.sh` |
-| `train.sh`                      | 8 卡 DDP 训练 (accelerate launch + fp16) | `bash scripts/train.sh` |
-| `train_resume.sh`               | 自动续训当前 profile 的最后一个 run; 已完成则退出 | `bash scripts/train_resume.sh` |
-| `train_new_or_resume.sh`        | 无 latest 时新建训练, 未完成则续训, 已完成则退出 | `bash scripts/train_new_or_resume.sh` |
-| `export.sh`                     | 兼容旧入口, 内部仍可用于单份 ONNX 导出 | `bash scripts/export.sh` |
+| `training/run_path.sh`          | 创建 / 解析 `runs/{profile}/{date_time}` 与 `latest` | `bash scripts/training/run_path.sh resolve` |
+| `collection/download_weights.sh` | 仅下载 PyTorch 权重 (不采集) | `bash scripts/collection/download_weights.sh` |
+| `collection/collect.sh`         | 启动 maker 采集 jpg+json | `bash scripts/collection/collect.sh` |
+| `collection/collect_local_8gpu.sh` | 8 卡本地模型采集 | `bash scripts/collection/collect_local_8gpu.sh` |
+| `data/split.sh`                 | 物理分割 train/val/test + 写 manifest | `bash scripts/data/split.sh` |
+| `data/split_and_zip_dataset.sh` | 分割并打包数据集 | `bash scripts/data/split_and_zip_dataset.sh` |
+| `training/train.sh`             | 8 卡 DDP 训练 (accelerate launch + fp16) | `bash scripts/training/train.sh` |
+| `training/train_resume.sh`      | 自动续训当前 profile 的最后一个 run; 已完成则退出 | `bash scripts/training/train_resume.sh` |
+| `training/train_new_or_resume.sh` | 无 latest 时新建训练, 未完成则续训, 已完成则退出 | `bash scripts/training/train_new_or_resume.sh` |
 | `export/install_ncnn_tools.sh`  | 下载 ncnn 预编译工具并准备 `pnnx` / `ncnnoptimize` | `bash scripts/export/install_ncnn_tools.sh` |
 | `export/export_onnx.sh`         | 默认同时导出 `fp16` + `fp32` ONNX | `bash scripts/export/export_onnx.sh` |
 | `export/export_torchscript.sh`  | best.pt → traced TorchScript | `bash scripts/export/export_torchscript.sh` |
@@ -46,35 +47,44 @@
 | `export/export_all.sh`          | 一次导出 ONNX + ncnn；各子目录分别生成 SHA256SUMS | `bash scripts/export/export_all.sh` |
 | `export/verify_onnx_against_pytorch.py` | 校验 ONNX 与 PyTorch logits 是否一致 | `python scripts/export/verify_onnx_against_pytorch.py ...` |
 | `export/verify_ncnn_against_pytorch.py` | 校验 ncnn 与 PyTorch logits 是否一致 | `python scripts/export/verify_ncnn_against_pytorch.py ...` |
-| `evaluate.sh`                   | 单卡 evaluate (test 集) | `bash scripts/evaluate.sh` |
-| `bench_multi.sh`                | 多卡 DDP 精度 benchmark | `bash scripts/bench_multi.sh` |
-| `bench_single.sh`               | 单卡速度 benchmark | `bash scripts/bench_single.sh` |
-| `vis.sh`                        | 随机抽样 test 集并导出预测图 | `bash scripts/vis.sh` |
-| `visualize_test_predictions.py` | 可视化实现脚本 | `python scripts/visualize_test_predictions.py --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml` |
+| `inference/predict_pytorch.sh`  | 单图/目录预测，PyTorch | `bash scripts/inference/predict_pytorch.sh` |
+| `inference/predict_onnx.sh`     | 单图/目录预测，ONNX | `bash scripts/inference/predict_onnx.sh` |
+| `inference/predict_ncnn.sh`     | 单图/目录预测，ncnn | `bash scripts/inference/predict_ncnn.sh` |
+| `evaluation/eval_accuracy.sh`   | maker 本地/服务端识别准确率评估 | `bash scripts/evaluation/eval_accuracy.sh` |
+| `evaluation/evaluate_pytorch.sh` | 单卡 evaluate，PyTorch | `bash scripts/evaluation/evaluate_pytorch.sh` |
+| `evaluation/evaluate_onnx.sh`   | 单卡 evaluate，ONNX | `bash scripts/evaluation/evaluate_onnx.sh` |
+| `evaluation/evaluate_ncnn.sh`   | 单卡 evaluate，ncnn | `bash scripts/evaluation/evaluate_ncnn.sh` |
+| `benchmark/bench_single_pytorch.sh` | 单卡速度 benchmark，PyTorch | `bash scripts/benchmark/bench_single_pytorch.sh` |
+| `benchmark/bench_single_onnx.sh` | 单卡速度 benchmark，ONNX | `bash scripts/benchmark/bench_single_onnx.sh` |
+| `benchmark/bench_single_ncnn.sh` | 单卡速度 benchmark，ncnn | `bash scripts/benchmark/bench_single_ncnn.sh` |
+| `benchmark/bench_multi.sh`      | 多卡 DDP 精度 benchmark | `bash scripts/benchmark/bench_multi.sh` |
+| `visualization/vis.sh`          | 随机抽样 test 集并导出预测图 | `bash scripts/visualization/vis.sh` |
+| `visualization/visualize_test_predictions.py` | 可视化实现脚本 | `python scripts/visualization/visualize_test_predictions.py --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml` |
+| `api/run_api_server.py`         | 启动 API server | `python scripts/api/run_api_server.py` |
 
 ## 一键式工作流
 
 ```bash
 # 1) 准备 (只需跑一次)
 cd /home/konghaomin/Prj/SHMTU/shmtu-terminal/Model/shmtu-cas-ocr-model
-bash scripts/download_weights.sh            # 预热权重缓存
-bash scripts/collect.sh                     # 采集数据集 (默认 5000 张)
-bash scripts/split.sh                       # 切 train/val/test
+bash scripts/collection/download_weights.sh # 预热权重缓存
+bash scripts/collection/collect.sh          # 采集数据集 (默认 5000 张)
+bash scripts/data/split.sh                  # 切 train/val/test
 
 # 2) 训练
-bash scripts/train.sh                       # 输出到 runs/{profile}/{YYYYMMDD_HHMMSS}, 并刷新 latest
-SHMTU_RESUME=1 bash scripts/train.sh       # 从当前 profile/latest/last.pt 续训, 继续写回原 run
-bash scripts/train_resume.sh               # 自动检查 latest/last.pt; 未完成则续训, 已完成则退出
-bash scripts/train_new_or_resume.sh        # 无 latest 则新建训练, 否则自动判断续训/退出
-bash scripts/export.sh                      # 导出 ONNX
+bash scripts/training/train.sh              # 输出到 runs/{profile}/{YYYYMMDD_HHMMSS}, 并刷新 latest
+SHMTU_RESUME=1 bash scripts/training/train.sh # 从当前 profile/latest/last.pt 续训, 继续写回原 run
+bash scripts/training/train_resume.sh       # 自动检查 latest/last.pt; 未完成则续训, 已完成则退出
+bash scripts/training/train_new_or_resume.sh # 无 latest 则新建训练, 否则自动判断续训/退出
+bash scripts/export/export_onnx.sh          # 导出 ONNX
 bash scripts/export/install_ncnn_tools.sh   # 下载 pnnx / ncnnoptimize
 bash scripts/export/export_all.sh           # 导出 ONNX + ncnn；onnx/ 和 ncnn/ 各自写 SHA256SUMS
 
 # 3) 评估 + benchmark
-bash scripts/evaluate.sh                    # 算 acc / ECE / 混淆矩阵
-bash scripts/bench_multi.sh                 # 多卡 DDP 精度
-bash scripts/bench_single.sh                # 单卡速度 (QPS)
-bash scripts/vis.sh                         # 可视化 test 集预测
+bash scripts/evaluation/evaluate_pytorch.sh  # 算 acc / ECE / 混淆矩阵
+bash scripts/benchmark/bench_multi.sh        # 多卡 DDP 精度
+bash scripts/benchmark/bench_single_pytorch.sh # 单卡速度 (QPS)
+bash scripts/visualization/vis.sh            # 可视化 test 集预测
 ```
 
 ## 覆盖默认参数
@@ -82,23 +92,23 @@ bash scripts/vis.sh                         # 可视化 test 集预测
 ```bash
 # 例: 采集 10000 张, 用 8 进程 × 4 协程, TCP 后端
 CAS_OCR_BACKEND=tcp COUNT=10000 PROCESSES=8 PER_PROCESS=4 \
-    bash scripts/collect.sh
+    bash scripts/collection/collect.sh
 
 # 例: 仅随机抽 5000 个已配对样本参与 train/val/test 分割
 MAX_FILES=5000 SEED=42 \
-    bash scripts/split.sh
+    bash scripts/data/split.sh
 
 # 例: 训练 4 卡 (单节点), 改 profile 名称
 SHMTU_NUM_GPUS=4 SHMTU_PROFILE_NAME=exp_4gpu \
-    bash scripts/train.sh
+    bash scripts/training/train.sh
 
 # 例: 训练后不自动生成测试集可视化
 SHMTU_AUTO_VIS=0 \
-    bash scripts/train.sh
+    bash scripts/training/train.sh
 
 # 例: 若 compile 路径不稳定, 临时关闭 dynamo
 SHMTU_DYNAMO_BACKEND=no \
-    bash scripts/train.sh
+    bash scripts/training/train.sh
 
 # 例: 导出指定 profile 的 latest
 SHMTU_PROFILE_NAME=exp_4gpu \
@@ -106,23 +116,23 @@ SHMTU_PROFILE_NAME=exp_4gpu \
 
 # 例: 显式指定某个具体 run 目录
 SHMTU_RUN_DIR=./runs/exp_4gpu/20260608_153000 \
-    bash scripts/evaluate.sh
+    bash scripts/evaluation/evaluate_pytorch.sh
 
 # 例: 从指定 checkpoint 续训, 继续写回该 checkpoint 所在 run 目录
 SHMTU_RESUME_FROM=./runs/exp_4gpu/20260608_153000/last.pt \
-    bash scripts/train.sh
+    bash scripts/training/train.sh
 
 # 例: 自动续训当前 profile 的最后一个 run
 SHMTU_PROFILE_NAME=exp_4gpu \
-    bash scripts/train_resume.sh
+    bash scripts/training/train_resume.sh
 
 # 例: 自动选择新建或续训
 SHMTU_PROFILE_NAME=exp_4gpu \
-    bash scripts/train_new_or_resume.sh
+    bash scripts/training/train_new_or_resume.sh
 
 # 例: 单卡速度 bench 用 CPU
 DEVICE=cpu NUM_SAMPLES=200 \
-    bash scripts/bench_single.sh
+    bash scripts/benchmark/bench_single_pytorch.sh
 ```
 
 ## 前提
@@ -136,14 +146,14 @@ pip install -e ./Model/shmtu-cas-ocr-model
 ## 可视化脚本
 
 ```bash
-bash scripts/vis.sh
+bash scripts/visualization/vis.sh
 
 CONFIG=src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml \
 SHMTU_RUN_DIR=./runs/8gpu_ddp/20260608_153000 \
 OUTPUT_DIR=./runs/8gpu_ddp/20260608_153000/outputs \
 N=20 \
 DEVICE=cuda \
-    bash scripts/vis.sh
+    bash scripts/visualization/vis.sh
 ```
 
 输出目录下会生成一个子目录，里面包含：

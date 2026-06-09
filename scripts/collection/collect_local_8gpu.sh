@@ -6,7 +6,7 @@ export NVI_NOTIFY_IGNORE_TASK=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/env.sh"
+source "$SCRIPT_DIR/../env.sh"
 
 COUNT="${COUNT:-10_0000}"
 CONFIG="${CONFIG:-$SHMTU_SRC/cas_ocr_model/trainer/configs/8gpu_ddp.yaml}"
@@ -15,7 +15,7 @@ if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
     export SHMTU_PROFILE_NAME
     export SHMTU_PROFILE_DIR="$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME"
 fi
-RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/run_path.sh" resolve)}"
+RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../run_path.sh" resolve)}"
 CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
 OUTPUT="${OUTPUT:-$SHMTU_DATASET_ROOT}"
 WEIGHTS_DIR="${WEIGHTS_DIR:-$SHMTU_WEIGHTS_DIR}"

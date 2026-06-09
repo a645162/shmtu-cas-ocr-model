@@ -3,7 +3,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/env.sh"
+source "$SCRIPT_DIR/../env.sh"
 TRAIN_RATIO="${TRAIN_RATIO:-0.8}"
 VAL_RATIO="${VAL_RATIO:-0.1}"
 TEST_RATIO="${TEST_RATIO:-0.1}"

@@ -3,13 +3,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-SHMTU_ENV_SILENT=1 source "$SCRIPT_DIR/env.sh"
+SHMTU_ENV_SILENT=1 source "$SCRIPT_DIR/../env.sh"
 
 usage() {
     cat <<'EOF'
 用法:
-  bash scripts/run_path.sh create
-  bash scripts/run_path.sh resolve
+  bash scripts/training/run_path.sh create
+  bash scripts/training/run_path.sh resolve
 
 环境变量:
   SHMTU_RUNS_ROOT      runs 根目录, 默认 ./runs
