@@ -83,6 +83,8 @@ train:
   weight_decay: 1.0e-4             # AdamW weight decay
   warmup_ratio: 0.05               # warmup 占总步数比例
   grad_clip: 1.0                   # 梯度裁剪阈值
+  nonfinite_backprop_step_patience: 10  # 连续多少个 step 出现 NaN/Inf 反传后停训, 0=关闭
+  nonfinite_backprop_epoch_patience: 10 # 连续多少个 epoch 出现 NaN/Inf 反传后停训, 0=关闭
   log_every_n_steps: 20            # 日志打印间隔
   save_every_n_epochs: 1           # checkpoint 保存间隔
   mixed_precision: fp16            # 与用户偏好对齐 (A100/H100/RTX40 也都支持)

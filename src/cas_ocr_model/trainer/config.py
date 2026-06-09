@@ -168,6 +168,12 @@ class TrainConfig:
     grad_clip: float = 1.0
     """梯度裁剪阈值 (L2 norm)."""
 
+    nonfinite_backprop_step_patience: int = 10
+    """反向传播出现非有限值时, 连续多少个 step 后停止训练. 0=关闭."""
+
+    nonfinite_backprop_epoch_patience: int = 10
+    """反向传播出现非有限值时, 连续多少个 epoch 后停止训练. 0=关闭."""
+
     log_every_n_steps: int = 20
     """accelerate.print 日志间隔."""
 
@@ -326,6 +332,8 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--weight-decay", type=float, default=None)
     p.add_argument("--warmup-ratio", type=float, default=None)
     p.add_argument("--grad-clip", type=float, default=None)
+    p.add_argument("--nonfinite-backprop-step-patience", type=int, default=None)
+    p.add_argument("--nonfinite-backprop-epoch-patience", type=int, default=None)
     p.add_argument("--mixed-precision", type=str, default=None)
     p.add_argument("--gradient-accumulation-steps", type=int, default=None)
     p.add_argument("--resume-from", type=str, default=None)

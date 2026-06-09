@@ -55,7 +55,8 @@ if epoch is None or total_epochs is None:
 
 epoch = int(epoch)
 total_epochs = int(total_epochs)
-done = 1 if (epoch + 1) >= total_epochs or early_stop_triggered or stop_reason == "early_stop" else 0
+done_reasons = {"early_stop", "nonfinite_backprop_steps", "nonfinite_backprop_epochs"}
+done = 1 if (epoch + 1) >= total_epochs or early_stop_triggered or stop_reason in done_reasons else 0
 print(f"{done} {epoch + 1} {total_epochs}")
 PY
 }

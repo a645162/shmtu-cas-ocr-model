@@ -31,6 +31,7 @@ import os
 import sys
 import time
 from contextlib import nullcontext
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +72,27 @@ try:
     )
 except ImportError:  # pragma: no cover - rich 是可选运行时依赖
     Progress = None
+
+
+BASE_METRICS = {
+    "loss": 0.0,
+    "acc_digit_left": 0.0,
+    "acc_operator": 0.0,
+    "acc_digit_right": 0.0,
+    "acc_expression": 0.0,
+}
+NONFINITE_BACKPROP_STEP_STOP = "nonfinite_backprop_steps"
+NONFINITE_BACKPROP_EPOCH_STOP = "nonfinite_backprop_epochs"
+
+
+@dataclass
+class TrainEpochResult:
+    metrics: dict[str, float]
+    global_step: int
+    had_nonfinite_backprop: bool
+    nonfinite_backprop_events: int
+    consecutive_nonfinite_backprop_steps: int
+    stop_reason: str | None = None
 
 
 # ----------------------------------------------------------------------------
@@ -224,6 +246,16 @@ def reduce_metric_sums(
         for idx, key in enumerate(keys)
     }
     return metrics, total_count
+
+
+def reduce_bool_any(accelerator: Accelerator, flag: bool) -> bool:
+    tensor = torch.tensor(
+        [1 if flag else 0],
+        device=accelerator.device,
+        dtype=torch.int32,
+    )
+    reduced = accelerator.reduce(tensor, reduction="sum")
+    return int(reduced.item()) > 0
 
 
 def format_seconds(seconds: float) -> str:
@@ -410,6 +442,13 @@ def resolve_early_stop_patience(cfg: FullConfig) -> int:
     return raw
 
 
+def resolve_nonfinite_backprop_patience(field_name: str, raw: int) -> int:
+    raw = int(raw)
+    if raw < 0:
+        raise ValueError(f"{field_name} 只允许 0 / 正整数")
+    return raw
+
+
 def infer_early_stop_state(history: list[dict[str, Any]]) -> tuple[float, int, int]:
     best_acc = -1.0
     best_epoch = 0
@@ -446,6 +485,20 @@ def infer_best_val_loss_state(history: list[dict[str, Any]]) -> tuple[float, int
     return best_val_loss, best_val_loss_epoch
 
 
+def make_metric_sum() -> dict[str, float]:
+    return dict(BASE_METRICS)
+
+
+def find_first_nonfinite_gradient(model: nn.Module) -> str | None:
+    for name, param in model.named_parameters():
+        grad = param.grad
+        if grad is None:
+            continue
+        if not bool(torch.isfinite(grad).all().item()):
+            return name
+    return None
+
+
 # ----------------------------------------------------------------------------
 # 训练主循环
 # ----------------------------------------------------------------------------
@@ -465,35 +518,103 @@ def train_one_epoch(
     steps_per_epoch: int,
     global_step: int,
     enable_rich_progress: bool,
-) -> tuple[dict[str, float], int]:
+    nonfinite_backprop_step_patience: int,
+    consecutive_nonfinite_backprop_steps: int,
+) -> TrainEpochResult:
     model.train()
-    metric_sum = {"loss": 0.0}
-    window_sum = {"loss": 0.0}
+    metric_sum = make_metric_sum()
+    window_sum = make_metric_sum()
     n = 0
     window_n = 0
     epoch_update_step = 0
     epoch_start = time.time()
     last_log_time = epoch_start
+    had_nonfinite_backprop = False
+    nonfinite_backprop_events = 0
+    stop_reason = None
     optimizer.zero_grad(set_to_none=True)
 
     progress, task_id = create_epoch_progress(epoch, total_epochs, steps_per_epoch) if enable_rich_progress else (None, None)
     progress_ctx = progress if progress is not None else nullcontext()
 
     with progress_ctx:
-        for step, (images, labels) in enumerate(loader, start=1):
+        for loader_step, (images, labels) in enumerate(loader, start=1):
             with accelerator.accumulate(model):
                 outputs = model(images, return_aux=True)
                 losses = loss_fn(outputs, labels)
                 loss = losses["loss"]
-                accs = compute_accuracy(outputs, labels)
+                local_nonfinite_loss = not bool(torch.isfinite(loss.detach()).all().item())
+                has_nonfinite_loss = reduce_bool_any(accelerator, local_nonfinite_loss)
+                local_nonfinite_grad_name = None
+                has_nonfinite_grad = False
 
-                accelerator.backward(loss)
-                if accelerator.sync_gradients and grad_clip and grad_clip > 0:
-                    accelerator.clip_grad_norm_(model.parameters(), grad_clip)
-                if accelerator.sync_gradients:
-                    optimizer.step()
-                    scheduler.step()
+                if has_nonfinite_loss:
                     optimizer.zero_grad(set_to_none=True)
+                else:
+                    accelerator.backward(loss)
+                    local_nonfinite_grad_name = find_first_nonfinite_gradient(model)
+                    has_nonfinite_grad = reduce_bool_any(
+                        accelerator,
+                        local_nonfinite_grad_name is not None,
+                    )
+                    if has_nonfinite_grad:
+                        optimizer.zero_grad(set_to_none=True)
+                    else:
+                        consecutive_nonfinite_backprop_steps = 0
+                        if accelerator.sync_gradients and grad_clip and grad_clip > 0:
+                            accelerator.clip_grad_norm_(model.parameters(), grad_clip)
+                        if accelerator.sync_gradients:
+                            optimizer.step()
+                            scheduler.step()
+                            optimizer.zero_grad(set_to_none=True)
+
+                if has_nonfinite_loss or has_nonfinite_grad:
+                    had_nonfinite_backprop = True
+                    nonfinite_backprop_events += 1
+                    consecutive_nonfinite_backprop_steps += 1
+                    reason = "loss" if has_nonfinite_loss else "grad"
+                    detail = ""
+                    if local_nonfinite_loss:
+                        detail = " local=loss"
+                    elif local_nonfinite_grad_name:
+                        detail = f" local_grad={local_nonfinite_grad_name}"
+                    accelerator.print(
+                        f"[nonfinite-backprop] epoch={epoch}/{total_epochs} "
+                        f"loader_step={loader_step}/{len(loader)} "
+                        f"update_step={epoch_update_step}/{steps_per_epoch} "
+                        f"global_step={global_step} "
+                        f"reason={reason} "
+                        f"consecutive_steps={consecutive_nonfinite_backprop_steps}"
+                        f"{detail}"
+                    )
+                    maybe_log_metrics(
+                        accelerator,
+                        {
+                            "nonfinite_backprop/event": 1.0,
+                            "nonfinite_backprop/is_loss": float(has_nonfinite_loss),
+                            "nonfinite_backprop/is_grad": float(has_nonfinite_grad),
+                            "nonfinite_backprop/consecutive_steps": float(consecutive_nonfinite_backprop_steps),
+                            "nonfinite_backprop/epoch": float(epoch),
+                            "nonfinite_backprop/loader_step": float(loader_step),
+                            "nonfinite_backprop/global_step": float(global_step),
+                        },
+                        step=global_step,
+                    )
+                    if (
+                        nonfinite_backprop_step_patience > 0
+                        and consecutive_nonfinite_backprop_steps >= nonfinite_backprop_step_patience
+                    ):
+                        stop_reason = NONFINITE_BACKPROP_STEP_STOP
+                        accelerator.print(
+                            f"[nonfinite-stop] triggered by consecutive steps at "
+                            f"epoch={epoch} loader_step={loader_step} "
+                            f"consecutive_steps={consecutive_nonfinite_backprop_steps} "
+                            f"patience={nonfinite_backprop_step_patience}"
+                        )
+                        break
+                    continue
+
+                accs = compute_accuracy(outputs, labels)
 
             bs = images.size(0)
             batch_metrics = {"loss": loss.item()}
@@ -563,12 +684,31 @@ def train_one_epoch(
                 },
                 step=global_step,
             )
-            window_sum = {"loss": 0.0}
+            window_sum = make_metric_sum()
             window_n = 0
             last_log_time = now
 
+        if stop_reason is not None:
+            if progress is not None:
+                progress.refresh()
+            metrics, _ = reduce_metric_sums(accelerator, metric_sum, n)
+            return TrainEpochResult(
+                metrics=metrics,
+                global_step=global_step,
+                had_nonfinite_backprop=had_nonfinite_backprop,
+                nonfinite_backprop_events=nonfinite_backprop_events,
+                consecutive_nonfinite_backprop_steps=consecutive_nonfinite_backprop_steps,
+                stop_reason=stop_reason,
+            )
+
     metrics, _ = reduce_metric_sums(accelerator, metric_sum, n)
-    return metrics, global_step
+    return TrainEpochResult(
+        metrics=metrics,
+        global_step=global_step,
+        had_nonfinite_backprop=had_nonfinite_backprop,
+        nonfinite_backprop_events=nonfinite_backprop_events,
+        consecutive_nonfinite_backprop_steps=consecutive_nonfinite_backprop_steps,
+    )
 
 
 # ----------------------------------------------------------------------------
@@ -827,8 +967,18 @@ def main() -> None:
     best_val_loss_epoch = 0
     global_step = 0
     epochs_without_improve = 0
+    consecutive_nonfinite_backprop_steps = 0
+    consecutive_nonfinite_backprop_epochs = 0
     metrics_history: list[dict[str, Any]] = load_metrics_history(cfg.train.output_dir)
     early_stop_patience = resolve_early_stop_patience(cfg)
+    nonfinite_backprop_step_patience = resolve_nonfinite_backprop_patience(
+        "train.nonfinite_backprop_step_patience",
+        cfg.train.nonfinite_backprop_step_patience,
+    )
+    nonfinite_backprop_epoch_patience = resolve_nonfinite_backprop_patience(
+        "train.nonfinite_backprop_epoch_patience",
+        cfg.train.nonfinite_backprop_epoch_patience,
+    )
     if early_stop_patience == 0:
         accelerator.print("[early-stop] disabled (train.early_stop_patience=0)")
     elif cfg.train.early_stop_patience == -1:
@@ -838,6 +988,13 @@ def main() -> None:
         )
     else:
         accelerator.print(f"[early-stop] enabled patience={early_stop_patience}")
+    if nonfinite_backprop_step_patience == 0 and nonfinite_backprop_epoch_patience == 0:
+        accelerator.print("[nonfinite-backprop-stop] disabled (both patience=0)")
+    else:
+        accelerator.print(
+            f"[nonfinite-backprop-stop] step_patience={nonfinite_backprop_step_patience} "
+            f"epoch_patience={nonfinite_backprop_epoch_patience}"
+        )
     if cfg.train.resume_from:
         ckpt = torch.load(cfg.train.resume_from, map_location="cpu")
         model_state = ckpt.get("model_state_dict")
@@ -855,6 +1012,8 @@ def main() -> None:
         best_val_loss = float(ckpt.get("best_val_loss", float("inf")))
         best_val_loss_epoch = int(ckpt.get("best_val_loss_epoch", 0))
         global_step = ckpt.get("global_step", start_epoch * steps_per_epoch)
+        consecutive_nonfinite_backprop_steps = int(ckpt.get("consecutive_nonfinite_backprop_steps", 0))
+        consecutive_nonfinite_backprop_epochs = int(ckpt.get("consecutive_nonfinite_backprop_epochs", 0))
         if not metrics_history:
             metrics_history = ckpt.get("metrics_history", [])
         if "epochs_without_improve" in ckpt:
@@ -871,7 +1030,9 @@ def main() -> None:
             f"[resume] from {cfg.train.resume_from} epoch={start_epoch} "
             f"best={best_acc:.4f} best_epoch={best_epoch} "
             f"best_val_loss={best_val_loss:.4f} best_val_loss_epoch={best_val_loss_epoch} "
-            f"stale_epochs={epochs_without_improve}"
+            f"stale_epochs={epochs_without_improve} "
+            f"nonfinite_steps={consecutive_nonfinite_backprop_steps} "
+            f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}"
         )
     elif metrics_history:
         inferred_best_acc, inferred_stale_epochs, inferred_best_epoch = infer_early_stop_state(metrics_history)
@@ -888,6 +1049,30 @@ def main() -> None:
         accelerator.wait_for_everyone()
         accelerator.end_training()
         return
+    if (
+        nonfinite_backprop_step_patience > 0
+        and consecutive_nonfinite_backprop_steps >= nonfinite_backprop_step_patience
+    ):
+        accelerator.print(
+            f"[nonfinite-stop] checkpoint already reached step patience: "
+            f"consecutive_steps={consecutive_nonfinite_backprop_steps} "
+            f"patience={nonfinite_backprop_step_patience}; skip training"
+        )
+        accelerator.wait_for_everyone()
+        accelerator.end_training()
+        return
+    if (
+        nonfinite_backprop_epoch_patience > 0
+        and consecutive_nonfinite_backprop_epochs >= nonfinite_backprop_epoch_patience
+    ):
+        accelerator.print(
+            f"[nonfinite-stop] checkpoint already reached epoch patience: "
+            f"consecutive_epochs={consecutive_nonfinite_backprop_epochs} "
+            f"patience={nonfinite_backprop_epoch_patience}; skip training"
+        )
+        accelerator.wait_for_everyone()
+        accelerator.end_training()
+        return
 
     # 7) 训练循环
     enable_rich_progress = should_use_rich_progress(accelerator, cfg)
@@ -895,7 +1080,7 @@ def main() -> None:
         accelerator.print(f"\n[epoch {epoch + 1}/{cfg.train.epochs}]")
         t0 = time.time()
 
-        train_metrics, global_step = train_one_epoch(
+        train_result = train_one_epoch(
             accelerator=accelerator,
             model=model,
             loader=train_loader,
@@ -909,7 +1094,106 @@ def main() -> None:
             steps_per_epoch=steps_per_epoch,
             global_step=global_step,
             enable_rich_progress=enable_rich_progress,
+            nonfinite_backprop_step_patience=nonfinite_backprop_step_patience,
+            consecutive_nonfinite_backprop_steps=consecutive_nonfinite_backprop_steps,
         )
+        train_metrics = train_result.metrics
+        global_step = train_result.global_step
+        consecutive_nonfinite_backprop_steps = train_result.consecutive_nonfinite_backprop_steps
+        epoch_had_nonfinite_backprop = train_result.had_nonfinite_backprop
+        if epoch_had_nonfinite_backprop:
+            consecutive_nonfinite_backprop_epochs += 1
+        else:
+            consecutive_nonfinite_backprop_epochs = 0
+        nonfinite_epoch_stop_triggered = (
+            nonfinite_backprop_epoch_patience > 0
+            and consecutive_nonfinite_backprop_epochs >= nonfinite_backprop_epoch_patience
+        )
+        train_time = time.time() - t0
+
+        if train_result.stop_reason == NONFINITE_BACKPROP_STEP_STOP:
+            stop_reason = train_result.stop_reason
+            accelerator.print(
+                f"[epoch-summary] epoch={epoch + 1}/{cfg.train.epochs} "
+                f"train_loss={train_metrics['loss']:.4f} "
+                f"train_acc_full={train_metrics['acc_expression']:.4f} "
+                f"time={train_time:.1f}s "
+                f"stop_reason={stop_reason} "
+                f"nonfinite_events={train_result.nonfinite_backprop_events} "
+                f"nonfinite_steps={consecutive_nonfinite_backprop_steps} "
+                f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}"
+            )
+            maybe_log_metrics(
+                accelerator,
+                {
+                    "epoch/index": float(epoch + 1),
+                    "epoch/global_step": float(global_step),
+                    "epoch/time_s": train_time,
+                    "epoch/train/lr": scheduler.get_last_lr()[0],
+                    "epoch/train/samples": float(len(train_ds)),
+                    "nonfinite_backprop/events": float(train_result.nonfinite_backprop_events),
+                    "nonfinite_backprop/consecutive_steps": float(consecutive_nonfinite_backprop_steps),
+                    "nonfinite_backprop/consecutive_epochs": float(consecutive_nonfinite_backprop_epochs),
+                    "nonfinite_backprop/triggered": 1.0,
+                    **prefix_metrics("epoch/train/", train_metrics),
+                },
+                step=global_step,
+            )
+            if accelerator.is_main_process:
+                epoch_record = {
+                    "epoch": epoch + 1,
+                    "total_epochs": cfg.train.epochs,
+                    "global_step": global_step,
+                    "best_val_acc": best_acc,
+                    "best_epoch": best_epoch,
+                    "best_val_loss": best_val_loss,
+                    "best_val_loss_epoch": best_val_loss_epoch,
+                    "is_best": False,
+                    "epochs_without_improve": epochs_without_improve,
+                    "early_stop_patience": early_stop_patience,
+                    "early_stop_triggered": False,
+                    "nonfinite_backprop_events": train_result.nonfinite_backprop_events,
+                    "epoch_had_nonfinite_backprop": epoch_had_nonfinite_backprop,
+                    "consecutive_nonfinite_backprop_steps": consecutive_nonfinite_backprop_steps,
+                    "consecutive_nonfinite_backprop_epochs": consecutive_nonfinite_backprop_epochs,
+                    "nonfinite_backprop_step_patience": nonfinite_backprop_step_patience,
+                    "nonfinite_backprop_epoch_patience": nonfinite_backprop_epoch_patience,
+                    "stop_reason": stop_reason,
+                    "time_s": train_time,
+                    "train": train_metrics,
+                    "val": None,
+                    "test": None,
+                    "config": cfg_to_dict(cfg),
+                }
+                metrics_history = save_epoch_metrics(
+                    cfg.train.output_dir,
+                    epoch_record,
+                    metrics_history,
+                )
+                save_checkpoint(
+                    accelerator=accelerator,
+                    model=model,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    epoch=epoch,
+                    global_step=global_step,
+                    cfg=cfg,
+                    metrics=train_metrics,
+                    metrics_stage="train",
+                    is_best=False,
+                    best_acc=best_acc,
+                    best_epoch=best_epoch,
+                    best_val_loss=best_val_loss,
+                    best_val_loss_epoch=best_val_loss_epoch,
+                    epochs_without_improve=epochs_without_improve,
+                    consecutive_nonfinite_backprop_steps=consecutive_nonfinite_backprop_steps,
+                    consecutive_nonfinite_backprop_epochs=consecutive_nonfinite_backprop_epochs,
+                    early_stop_patience=early_stop_patience,
+                    early_stop_triggered=False,
+                    stop_reason=stop_reason,
+                    metrics_history=metrics_history,
+                )
+            break
 
         # 验证 (每个 epoch 结束, 用于 early-stop 决策 / 日志)
         val_metrics = evaluate(
@@ -933,8 +1217,13 @@ def main() -> None:
         early_stop_triggered = (
             early_stop_patience > 0 and epochs_without_improve >= early_stop_patience
         )
-
-        train_time = time.time() - t0
+        nonfinite_stop_triggered = nonfinite_epoch_stop_triggered
+        if nonfinite_stop_triggered:
+            accelerator.print(
+                f"[nonfinite-stop] triggered by consecutive epochs at "
+                f"epoch={epoch + 1} consecutive_epochs={consecutive_nonfinite_backprop_epochs} "
+                f"patience={nonfinite_backprop_epoch_patience}"
+            )
         accelerator.print(
             f"[epoch-summary] epoch={epoch + 1}/{cfg.train.epochs} "
             f"train_loss={train_metrics['loss']:.4f} "
@@ -945,7 +1234,10 @@ def main() -> None:
             f"best_val_acc={best_acc:.4f}@{best_epoch} "
             f"best_val_loss={best_val_loss:.4f}@{best_val_loss_epoch} "
             f"is_best={is_best} "
-            f"stale_epochs={epochs_without_improve}"
+            f"stale_epochs={epochs_without_improve} "
+            f"nonfinite_events={train_result.nonfinite_backprop_events} "
+            f"nonfinite_steps={consecutive_nonfinite_backprop_steps} "
+            f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}"
         )
         maybe_log_metrics(
             accelerator,
@@ -966,6 +1258,13 @@ def main() -> None:
                 "early_stop/patience": float(early_stop_patience),
                 "early_stop/stale_epochs": float(epochs_without_improve),
                 "early_stop/triggered": float(early_stop_triggered),
+                "nonfinite_backprop/events": float(train_result.nonfinite_backprop_events),
+                "nonfinite_backprop/epoch_flag": float(epoch_had_nonfinite_backprop),
+                "nonfinite_backprop/consecutive_steps": float(consecutive_nonfinite_backprop_steps),
+                "nonfinite_backprop/consecutive_epochs": float(consecutive_nonfinite_backprop_epochs),
+                "nonfinite_backprop/step_patience": float(nonfinite_backprop_step_patience),
+                "nonfinite_backprop/epoch_patience": float(nonfinite_backprop_epoch_patience),
+                "nonfinite_backprop/triggered": float(nonfinite_stop_triggered),
                 **prefix_metrics("epoch/train/", train_metrics),
                 **prefix_metrics("epoch/val/", val_metrics),
             },
@@ -976,7 +1275,7 @@ def main() -> None:
         is_last = (epoch + 1) == cfg.train.epochs
         is_final_epoch = is_last or early_stop_triggered
         test_metrics: dict[str, float] | None = None
-        if is_final_epoch and test_loader is not None:
+        if is_final_epoch and not nonfinite_stop_triggered and test_loader is not None:
             test_metrics = evaluate(
                 accelerator,
                 model,
@@ -1004,7 +1303,9 @@ def main() -> None:
 
         if accelerator.is_main_process:
             stop_reason = None
-            if early_stop_triggered:
+            if nonfinite_stop_triggered:
+                stop_reason = NONFINITE_BACKPROP_EPOCH_STOP
+            elif early_stop_triggered:
                 stop_reason = "early_stop"
             elif is_last:
                 stop_reason = "max_epochs"
@@ -1020,6 +1321,12 @@ def main() -> None:
                 "epochs_without_improve": epochs_without_improve,
                 "early_stop_patience": early_stop_patience,
                 "early_stop_triggered": early_stop_triggered,
+                "nonfinite_backprop_events": train_result.nonfinite_backprop_events,
+                "epoch_had_nonfinite_backprop": epoch_had_nonfinite_backprop,
+                "consecutive_nonfinite_backprop_steps": consecutive_nonfinite_backprop_steps,
+                "consecutive_nonfinite_backprop_epochs": consecutive_nonfinite_backprop_epochs,
+                "nonfinite_backprop_step_patience": nonfinite_backprop_step_patience,
+                "nonfinite_backprop_epoch_patience": nonfinite_backprop_epoch_patience,
                 "stop_reason": stop_reason,
                 "time_s": train_time,
                 "train": train_metrics,
@@ -1037,6 +1344,7 @@ def main() -> None:
         should_save_checkpoint = (
             (epoch + 1) % cfg.train.save_every_n_epochs == 0
             or is_final_epoch
+            or nonfinite_stop_triggered
         )
         if accelerator.is_main_process and should_save_checkpoint:
             save_checkpoint(
@@ -1048,18 +1356,23 @@ def main() -> None:
                 global_step=global_step,
                 cfg=cfg,
                 metrics=val_metrics,
+                metrics_stage="val",
                 is_best=is_best,
                 best_acc=best_acc,
                 best_epoch=best_epoch,
                 best_val_loss=best_val_loss,
                 best_val_loss_epoch=best_val_loss_epoch,
                 epochs_without_improve=epochs_without_improve,
+                consecutive_nonfinite_backprop_steps=consecutive_nonfinite_backprop_steps,
+                consecutive_nonfinite_backprop_epochs=consecutive_nonfinite_backprop_epochs,
                 early_stop_patience=early_stop_patience,
                 early_stop_triggered=early_stop_triggered,
                 stop_reason=stop_reason,
                 metrics_history=metrics_history,
             )
 
+        if nonfinite_stop_triggered:
+            break
         if early_stop_triggered:
             accelerator.print(
                 f"[early-stop] triggered at epoch={epoch + 1} "
@@ -1088,7 +1401,7 @@ def evaluate(
     enable_rich_progress: bool = False,
 ) -> dict[str, float]:
     model.eval()
-    metric_sum = {"loss": 0.0}
+    metric_sum = make_metric_sum()
     n = 0
     progress, task_id = create_eval_progress(stage, len(loader)) if enable_rich_progress else (None, None)
     progress_ctx = progress if progress is not None else nullcontext()
@@ -1161,12 +1474,15 @@ def save_checkpoint(
     global_step: int,
     cfg: FullConfig,
     metrics: dict[str, float],
+    metrics_stage: str,
     is_best: bool,
     best_acc: float,
     best_epoch: int,
     best_val_loss: float,
     best_val_loss_epoch: int,
     epochs_without_improve: int,
+    consecutive_nonfinite_backprop_steps: int,
+    consecutive_nonfinite_backprop_epochs: int,
     early_stop_patience: int,
     early_stop_triggered: bool,
     stop_reason: str | None,
@@ -1196,6 +1512,8 @@ def save_checkpoint(
         "best_val_loss": best_val_loss,
         "best_val_loss_epoch": best_val_loss_epoch,
         "epochs_without_improve": epochs_without_improve,
+        "consecutive_nonfinite_backprop_steps": consecutive_nonfinite_backprop_steps,
+        "consecutive_nonfinite_backprop_epochs": consecutive_nonfinite_backprop_epochs,
         "early_stop_patience": early_stop_patience,
         "early_stop_triggered": early_stop_triggered,
         "stop_reason": stop_reason,
@@ -1205,7 +1523,10 @@ def save_checkpoint(
     }
     last_path = output_dir / "last.pt"
     accelerator.save(state, str(last_path))
-    accelerator.print(f"[ckpt] saved {last_path} (epoch={epoch + 1}, val_acc={metrics['acc_expression']:.4f})")
+    accelerator.print(
+        f"[ckpt] saved {last_path} "
+        f"(epoch={epoch + 1}, {metrics_stage}_acc={metrics['acc_expression']:.4f})"
+    )
 
     if is_best:
         best_path = output_dir / "best.pt"
