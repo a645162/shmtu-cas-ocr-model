@@ -31,3 +31,26 @@ def test_repvgg_alias_builds_and_runs_forward():
     assert y.shape[0] == 2
     assert y.shape[1] == feat_dim
     assert y.ndim == 4
+
+
+def test_mobilenetv4_aliases_are_listed():
+    names = list_available_backbones()
+    assert "mobilenetv4_conv_small" in names
+    assert "mobilenetv4_conv_large" in names
+    assert "mobilenetv4_hybrid_large" in names
+
+
+def test_mobilenetv4_aliases_are_supported():
+    assert is_supported_backbone("mobilenetv4_conv_small") is True
+    assert is_supported_backbone("mobilenetv4_hybrid_medium") is True
+
+
+def test_mobilenetv4_alias_builds_and_runs_forward():
+    backbone, feat_dim = build_resnet_backbone("mobilenetv4_conv_small", pretrained=False)
+    x = torch.randn(2, 1, 64, 192)
+    y = backbone(x)
+
+    assert feat_dim == 960
+    assert y.shape[0] == 2
+    assert y.shape[1] == feat_dim
+    assert y.ndim == 4

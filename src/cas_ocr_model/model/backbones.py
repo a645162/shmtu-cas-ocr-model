@@ -8,6 +8,7 @@
     * resnet101 / r101
     * mobilenetv3_small_050 / _075 / _100
     * mobilenetv3_large_075 / _100 / _150d
+    * mobilenetv4_conv_small / medium / large / hybrid_medium / hybrid_large 等
     * mobilenetv3_rw
     * repvgg_a0 / a1 / a2 / b0 / b1 / b1g4 / b2 / b2g4 / b3 / b3g4 / d2se
     * 任意 ``timm/<model_name>`` 形式的 timm features_only backbone
@@ -165,6 +166,18 @@ for _alias, _model_name in (
     ("mobilenetv3_large_100", "mobilenetv3_large_100"),
     ("mobilenetv3_large_150d", "mobilenetv3_large_150d"),
     ("mobilenetv3_rw", "mobilenetv3_rw"),
+    ("mobilenetv4_conv_small", "mobilenetv4_conv_small"),
+    ("mobilenetv4_conv_small_035", "mobilenetv4_conv_small_035"),
+    ("mobilenetv4_conv_small_050", "mobilenetv4_conv_small_050"),
+    ("mobilenetv4_conv_medium", "mobilenetv4_conv_medium"),
+    ("mobilenetv4_conv_large", "mobilenetv4_conv_large"),
+    ("mobilenetv4_conv_aa_medium", "mobilenetv4_conv_aa_medium"),
+    ("mobilenetv4_conv_aa_large", "mobilenetv4_conv_aa_large"),
+    ("mobilenetv4_conv_blur_medium", "mobilenetv4_conv_blur_medium"),
+    ("mobilenetv4_hybrid_medium", "mobilenetv4_hybrid_medium"),
+    ("mobilenetv4_hybrid_medium_075", "mobilenetv4_hybrid_medium_075"),
+    ("mobilenetv4_hybrid_large", "mobilenetv4_hybrid_large"),
+    ("mobilenetv4_hybrid_large_075", "mobilenetv4_hybrid_large_075"),
     ("repvgg_a0", "repvgg_a0"),
     ("repvgg_a1", "repvgg_a1"),
     ("repvgg_a2", "repvgg_a2"),

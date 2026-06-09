@@ -6,7 +6,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `backbones.py`        | backbone 工厂: `build_resnet_backbone(name, pretrained)`. 支持 torchvision 旧名、`r50`/`resnet101`、多种 MobileNetV3、`repvgg_*` 快捷别名，以及 `timm/<model_name>` 动态 backbone，统一接收 1 通道灰度图 |
+| `backbones.py`        | backbone 工厂: `build_resnet_backbone(name, pretrained)`. 支持 torchvision 旧名、`r50`/`resnet101`、多种 MobileNetV3、`mobilenetv4_*` 与 `repvgg_*` 快捷别名，以及 `timm/<model_name>` 动态 backbone，统一接收 1 通道灰度图 |
 | `heads.py`            | `TriSlotDecoder` 容器: 共享特征向量 → 3 个槽位输出 (digit_left / operator / digit_right) |
 | `captcha_trislot_decoder_cnn.py` | 当前主模型: backbone + TriSlotDecoder, 一次前向输出 3 个 logits |
 | `registry.py`         | 模型版本注册表、checkpoint 元信息、release 资产命名 |

@@ -83,6 +83,7 @@ loss:
 | `resnet18` | 默认基线 | 对比实验 |
 | `resnet34` | 更大更慢 | 精度优先 |
 | `r50` / `resnet101` | 大模型 | 研究用途 |
+| `mobilenetv4_conv_small` / `mobilenetv4_hybrid_medium` / ... | timm 中的 MobileNetV4 快捷别名 | 轻量 CNN 实验 |
 | `repvgg_a0` / `repvgg_b1` / ... | timm 中的 RepVGG 快捷别名 | 轻量 CNN 实验 |
 | `timm/<model_name>` | 任意 timm backbone | 灵活实验 |
 

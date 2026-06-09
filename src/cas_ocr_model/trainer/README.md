@@ -99,7 +99,7 @@ accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor -
 * **Early stop**: `train.early_stop_patience=0` 关闭; `-1` 自动取总 epoch 的 20%; 正整数表示连续多少个验证 epoch 不提升后停止
 * **梯度裁剪** L2=1.0
 * **AdamW** + 1e-4 weight decay
-* **ImageNet 预训练 backbone**: 例如 `resnet18` / `resnet34` / `r50` / `resnet101` / `mobilenetv3_large_100` / `repvgg_a0` / `repvgg_b1` / `timm/<model_name>`
+* **ImageNet 预训练 backbone**: 例如 `resnet18` / `resnet34` / `r50` / `resnet101` / `mobilenetv3_large_100` / `mobilenetv4_conv_small` / `mobilenetv4_hybrid_medium` / `repvgg_a0` / `repvgg_b1` / `timm/<model_name>`
 * **标签平滑** 0.05
 * **主进程 rich 进度条**: 交互式终端显示 step/loss/acc/lr/吞吐, 非 TTY 自动回退文本日志
 * **DDP 全局聚合日志**: train/val/test 指标按所有 rank 汇总, 可直接用于 console 和 wandb
