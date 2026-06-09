@@ -1,4 +1,4 @@
-"""Captcha 主模型: ResNet 空间特征图 + 位置感知 3-head.
+"""Captcha 主模型: ResNet 空间特征图 + TriSlot Decoder.
 
 设计原则:
     * 单 CNN 一次前向同时输出 digit_left / operator / digit_right
@@ -19,11 +19,11 @@ import torch
 import torch.nn as nn
 
 from .backbones import build_resnet_backbone
-from .heads import TripleHead
+from .heads import TriSlotDecoder
 
 
-class CaptchaTripleHeadCNN(nn.Module):
-    """backbone (灰度 1 通道) + 3-head 分类器."""
+class CaptchaTriSlotDecoderCNN(nn.Module):
+    """backbone (灰度 1 通道) + TriSlot Decoder 分类器."""
 
     def __init__(
         self,
@@ -41,7 +41,7 @@ class CaptchaTripleHeadCNN(nn.Module):
         self.num_operator_classes = num_operator_classes
 
         self.backbone, feat_dim = build_resnet_backbone(backbone, pretrained=pretrained)
-        self.heads = TripleHead(
+        self.decoder = TriSlotDecoder(
             feat_dim=feat_dim,
             num_digit_classes=num_digit_classes,
             num_operator_classes=num_operator_classes,
@@ -60,7 +60,7 @@ class CaptchaTripleHeadCNN(nn.Module):
         返回 dict: {digit_left_logits, operator_logits, digit_right_logits}
         """
         feat_map = self.backbone(x)
-        return self.heads(feat_map, return_aux=return_aux)
+        return self.decoder(feat_map, return_aux=return_aux)
 
 
 # ----------------------------------------------------------------------------
@@ -70,7 +70,7 @@ class CaptchaTripleHeadCNN(nn.Module):
 
 @torch.no_grad()
 def predict_triple(
-    model: CaptchaTripleHeadCNN,
+    model: CaptchaTriSlotDecoderCNN,
     image: torch.Tensor,
     operator_labels: list[str],
     digit_labels: list[str],
@@ -99,10 +99,10 @@ def predict_triple(
 
 
 def load_checkpoint(
-    model: CaptchaTripleHeadCNN,
+    model: CaptchaTriSlotDecoderCNN,
     ckpt_path: str,
     device: Optional[torch.device] = None,
-) -> CaptchaTripleHeadCNN:
+) -> CaptchaTriSlotDecoderCNN:
     """加载权重. 兼容 DDP 保存的 state_dict (带 'module.' 前缀)."""
     sd = torch.load(ckpt_path, map_location=device or "cpu")
     if isinstance(sd, dict) and "model_state_dict" in sd:
@@ -117,18 +117,15 @@ def load_checkpoint(
 def build_model_from_checkpoint(
     ckpt_path: str,
     device: Optional[torch.device] = None,
-) -> CaptchaTripleHeadCNN:
+) -> CaptchaTriSlotDecoderCNN:
     """从 checkpoint 中恢复模型结构配置并加载权重."""
     raw = torch.load(ckpt_path, map_location=device or "cpu")
     cfg = raw.get("config", {}) if isinstance(raw, dict) else {}
-    model_cfg = cfg.get("model", {})
+    from .registry import build_model_from_config
 
-    model = CaptchaTripleHeadCNN(
-        backbone=model_cfg.get("backbone", "resnet18"),
-        pretrained=False,
-        dropout=model_cfg.get("dropout", 0.2),
-        slot_hidden_dim=model_cfg.get("slot_hidden_dim", 256),
-        slot_attention_heads=model_cfg.get("slot_attention_heads", 4),
+    model = build_model_from_config(
+        cfg,
+        pretrained_override=False,
         num_digit_classes=10,
         num_operator_classes=3,
     )

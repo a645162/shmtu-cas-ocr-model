@@ -23,7 +23,7 @@ if ! command -v accelerate >/dev/null 2>&1; then
 fi
 
 resolve_latest_run() {
-    if RUN_DIR="$(bash "$SCRIPT_DIR/run_path.sh" resolve 2>/dev/null)"; then
+    if RUN_DIR="$(bash "$SCRIPT_DIR/../common/run_path.sh" resolve 2>/dev/null)"; then
         printf '%s\n' "$RUN_DIR"
         return 0
     fi

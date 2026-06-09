@@ -4,7 +4,7 @@
 
 支持模型：
 
-- `v2`: 新版 triple-head `best.pt`
+- `v2`: 新版 TriSlot Decoder `best.pt`
 - `v1`: 旧版三模型 `.pth`
 
 支持协议：

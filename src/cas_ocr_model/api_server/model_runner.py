@@ -8,6 +8,7 @@ import numpy as np
 import torch
 
 from cas_ocr_model.inference import CaptchaInferencer, InferencerConfig, PyTorchBackend
+from cas_ocr_model.model import inspect_checkpoint
 from cas_ocr_model.v1.inference.predictor import load_models, predict_validate_code
 from cas_ocr_model.v1.models.operator_enum import (
     OperatorEnum,
@@ -52,13 +53,21 @@ def _default_v2_checkpoint() -> Path:
         Path("workdir"),
         Path("."),
     ]
+    patterns = ("best.pt", "*.trislot_decoder.v*.pt", "*.pt")
     for candidate in candidates:
         if not candidate.exists():
             continue
-        matches = sorted(candidate.rglob("best.pt"))
-        if matches:
-            return matches[0].resolve()
-    raise FileNotFoundError("Unable to find best.pt, please pass --checkpoint")
+        for pattern in patterns:
+            matches = sorted(candidate.rglob(pattern))
+            for match in matches:
+                if match.name == "last.pt":
+                    continue
+                try:
+                    inspect_checkpoint(match)
+                except Exception:  # noqa: BLE001
+                    continue
+                return match.resolve()
+    raise FileNotFoundError("Unable to find v2 checkpoint, please pass --checkpoint")
 
 
 def _default_v1_model_dir() -> Path:

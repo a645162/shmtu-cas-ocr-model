@@ -1,6 +1,6 @@
 """导出 ONNX, 供推理端 (C++ ncnn / Rust onnxruntime) 替换 v1 的"3 个独立模型".
 
-输入: best.pt (或任意 CaptchaTripleHeadCNN 权重)
+输入: best.pt (或任意 CaptchaTriSlotDecoderCNN 权重)
 输出: model.onnx, 输入 (1, 1, H, W) in [0, 1], 输出 3 个 logits.
 支持导出 fp32 / fp16.
 
@@ -13,6 +13,8 @@
 from __future__ import annotations
 
 import argparse
+import tempfile
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -34,15 +36,30 @@ class ExportWrapper(nn.Module):
 def resolve_export_device(device_name: str, precision: str) -> torch.device:
     if device_name == "auto":
         if precision == "fp16":
-            if not torch.cuda.is_available():
-                raise SystemExit("导出 fp16 ONNX 需要 CUDA 环境, 或改为 --precision fp32")
-            return torch.device("cuda")
+            if torch.cuda.is_available():
+                return torch.device("cuda")
+            return torch.device("cpu")
         return torch.device("cpu")
     if device_name == "cuda":
         if not torch.cuda.is_available():
             raise SystemExit("指定了 --device cuda, 但当前 CUDA 不可用")
         return torch.device("cuda")
     return torch.device("cpu")
+
+
+def convert_onnx_fp32_to_fp16(src: str | Path, dst: str | Path) -> None:
+    try:
+        import onnx
+        from onnxconverter_common import float16
+    except ImportError as exc:
+        raise SystemExit(
+            "CPU 导出 fp16 ONNX 需要额外依赖 onnxconverter-common. "
+            "请先执行: pip install onnxconverter-common"
+        ) from exc
+
+    model = onnx.load(str(src))
+    model_fp16 = float16.convert_float_to_float16(model, keep_io_types=True)
+    onnx.save(model_fp16, str(dst))
 
 
 def main() -> None:
@@ -64,7 +81,10 @@ def main() -> None:
     args = p.parse_args()
 
     device = resolve_export_device(args.device, args.precision)
-    export_dtype = torch.float16 if args.precision == "fp16" else torch.float32
+    needs_cpu_fp16_conversion = args.precision == "fp16" and device.type == "cpu"
+    export_dtype = torch.float32 if needs_cpu_fp16_conversion else (
+        torch.float16 if args.precision == "fp16" else torch.float32
+    )
 
     model = build_model_from_checkpoint(args.checkpoint, device=device)
     model.eval()
@@ -88,10 +108,17 @@ def main() -> None:
             "digit_right_logits": {0: "batch"},
         }
 
+    export_target = args.output
+    tmp_dir: tempfile.TemporaryDirectory[str] | None = None
+    if needs_cpu_fp16_conversion:
+        tmp_dir = tempfile.TemporaryDirectory(prefix="cas_ocr_onnx_fp16_")
+        export_target = str(Path(tmp_dir.name) / "model.fp32.onnx")
+        print("[export] fp16 onnx: CUDA 不可用，切换为 CPU 上先导出 fp32 再转换为 fp16")
+
     torch.onnx.export(
         wrapper,
         dummy,
-        args.output,
+        export_target,
         input_names=["input"],
         output_names=["digit_left_logits", "operator_logits", "digit_right_logits"],
         dynamic_axes=dynamic_axes,
@@ -99,6 +126,10 @@ def main() -> None:
         do_constant_folding=True,
         dynamo=not args.legacy_exporter,
     )
+    if needs_cpu_fp16_conversion:
+        convert_onnx_fp32_to_fp16(export_target, args.output)
+        if tmp_dir is not None:
+            tmp_dir.cleanup()
     print(f"[export] saved -> {args.output}")
 
 

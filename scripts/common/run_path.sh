@@ -8,8 +8,8 @@ SHMTU_ENV_SILENT=1 source "$SCRIPT_DIR/../env.sh"
 usage() {
     cat <<'EOF'
 用法:
-  bash scripts/training/run_path.sh create
-  bash scripts/training/run_path.sh resolve
+  bash scripts/common/run_path.sh create
+  bash scripts/common/run_path.sh resolve
 
 环境变量:
   SHMTU_RUNS_ROOT      runs 根目录, 默认 ./runs

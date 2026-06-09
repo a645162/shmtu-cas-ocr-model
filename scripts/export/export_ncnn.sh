@@ -45,11 +45,10 @@ if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
     export SHMTU_PROFILE_NAME
     export SHMTU_PROFILE_DIR="$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME"
 fi
-RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../run_path.sh" resolve)}"
+RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../common/run_path.sh" resolve)}"
 CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
 EXPORT_ROOT="${EXPORT_ROOT:-$RUN_DIR/export}"
 EXPORT_DIR="${EXPORT_DIR:-$EXPORT_ROOT/ncnn}"
-MODEL_NAME="${MODEL_NAME:-$(basename "${CHECKPOINT%.*}")}"
 EXPORT_NCNN_MODE="${EXPORT_NCNN_MODE:-python}"
 IMAGE_SIZE_H="${IMAGE_SIZE_H:-64}"
 IMAGE_SIZE_W="${IMAGE_SIZE_W:-192}"
@@ -64,6 +63,8 @@ if [ ! -f "$CHECKPOINT" ]; then
     echo "[export-ncnn] checkpoint 不存在: $CHECKPOINT"
     exit 1
 fi
+
+MODEL_NAME="${MODEL_NAME:-$("$SHMTU_PYTHON" -m cas_ocr_model.model.cli checkpoint-metadata --checkpoint "$CHECKPOINT" --field asset_stem 2>/dev/null || basename "${CHECKPOINT%.*}")}"
 
 normalize_precision() {
     case "$1" in

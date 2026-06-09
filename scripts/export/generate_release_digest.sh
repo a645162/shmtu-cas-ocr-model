@@ -12,7 +12,7 @@ if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
     export SHMTU_PROFILE_DIR="$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME"
 fi
 
-RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../run_path.sh" resolve)}"
+RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../common/run_path.sh" resolve)}"
 EXPORT_ROOT="${EXPORT_ROOT:-$RUN_DIR/export}"
 DIGEST_FILE="${DIGEST_FILE:-$EXPORT_ROOT/SHA256SUMS.txt}"
 

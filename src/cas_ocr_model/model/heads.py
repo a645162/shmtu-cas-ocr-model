@@ -1,11 +1,11 @@
-"""位置感知 3-head 解码器."""
+"""位置感知 TriSlot Decoder."""
 from __future__ import annotations
 
 import torch
 import torch.nn as nn
 
 
-class TripleHead(nn.Module):
+class TriSlotDecoder(nn.Module):
     """把空间特征图按宽度解码为 digit / operator / digit 三个槽位."""
 
     def __init__(
@@ -96,3 +96,4 @@ class TripleHead(nn.Module):
         outputs["slot_attention"] = attn
         outputs["slot_centers"] = slot_centers
         return outputs
+

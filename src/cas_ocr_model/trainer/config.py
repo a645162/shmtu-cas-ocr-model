@@ -120,6 +120,9 @@ class DataConfig:
 class ModelConfig:
     """模型结构配置."""
 
+    version: str = "2.0"
+    """模型版本. 当前默认 2.0."""
+
     backbone: str = "resnet18"
     """backbone 名称 (当前支持 resnet18 / resnet34 / mobilenet_v3_small)."""
 
@@ -306,6 +309,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--aug-rethreshold-after-aug", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
 
     # model
+    p.add_argument("--model-version", type=str, default=None)
     p.add_argument("--backbone", type=str, default=None)
     p.add_argument("--pretrained", type=lambda v: v.lower() in ("1", "true", "yes"), default=None)
     p.add_argument("--dropout", type=float, default=None)
@@ -370,6 +374,7 @@ def merge_args_to_config(cfg: FullConfig, args: argparse.Namespace) -> FullConfi
                 break
 
     nested_cli = {
+        "model_version": ("model", "version"),
         "aug_enabled": ("data", "augmentation", "enabled"),
         "aug_translate_enabled": ("data", "augmentation", "translate_enabled"),
         "aug_translate_prob": ("data", "augmentation", "translate_prob"),

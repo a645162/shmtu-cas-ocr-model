@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="8 卡本地模型验证码采集: 每卡 1 进程, 推理后提交 CAS 验证"
     )
-    p.add_argument("--checkpoint", required=True, help="triple-head checkpoint (best.pt)")
+    p.add_argument("--checkpoint", required=True, help="TriSlot Decoder checkpoint (best.pt)")
     p.add_argument("--output", default="./dataset", help="输出目录 (含 .jpg + .json)")
     p.add_argument("--count", type=int, default=1000, help="目标成功保存数量 (在已有基础上累加)")
     p.add_argument("--gpu-ids", type=str, required=True, help="逗号分隔 GPU 编号, 例如 0,1,2,3,4,5,6,7")

@@ -11,6 +11,7 @@
 - `verify_ncnn_against_pytorch.py`: 对比 ncnn 与 PyTorch 直接推理的 logits
 - `generate_release_digest.sh`: 在当前导出目录内生成 GitHub Release 用的 `SHA256SUMS.txt`
 - `export_all.sh`: 同时导出 ONNX 和 ncnn；每个子目录各自刷新自己的 `SHA256SUMS.txt`
+- `python -m cas_ocr_model.export.release_bundle`: 批量生成 release 用的 `pytorch/onnx/ncnn + model-assets.json`
 
 ## 常用环境变量
 
@@ -19,7 +20,7 @@ SHMTU_PROFILE_NAME=8gpu_ddp
 SHMTU_RUN_DIR=./runs/8gpu_ddp/20260608_153000
 CHECKPOINT=./runs/8gpu_ddp/20260608_153000/best.pt
 EXPORT_ROOT=./runs/8gpu_ddp/20260608_153000/export
-MODEL_NAME=best
+MODEL_NAME=mobilenet_v3_small.trislot_decoder.v2_0
 EXPORT_PRECISIONS="fp16 fp32"
 EXPORT_DEVICE=auto
 IMAGE_SIZE_H=64
@@ -38,22 +39,18 @@ RUN_NCNNOPTIMIZE=0
 runs/.../export/
   onnx/
     SHA256SUMS.txt
-    best.fp16.onnx
-    best.fp32.onnx
+    mobilenet_v3_small.trislot_decoder.v2_0.fp16.onnx
+    mobilenet_v3_small.trislot_decoder.v2_0.fp32.onnx
   ncnn/
     SHA256SUMS.txt
-    best.fp16.pt
-    best.fp16.param
-    best.fp16.bin
-    best.fp16.opt.param
-    best.fp16.opt.bin
-    best.fp32.pt
-    best.fp32.param
-    best.fp32.bin
-    best.fp32.opt.param
-    best.fp32.opt.bin
+    mobilenet_v3_small.trislot_decoder.v2_0.fp16.pt
+    mobilenet_v3_small.trislot_decoder.v2_0.fp16.param
+    mobilenet_v3_small.trislot_decoder.v2_0.fp16.bin
+    mobilenet_v3_small.trislot_decoder.v2_0.fp32.pt
+    mobilenet_v3_small.trislot_decoder.v2_0.fp32.param
+    mobilenet_v3_small.trislot_decoder.v2_0.fp32.bin
   torchscript/
-    best.fp16.ts.pt   # 仅独立运行 export_torchscript.sh 时默认放这里
+    mobilenet_v3_small.trislot_decoder.v2_0.fp16.ts.pt   # 仅独立运行 export_torchscript.sh 时默认放这里
 ```
 
 ## 示例
@@ -86,18 +83,23 @@ RUN_NCNNOPTIMIZE=1 \
 # 直接用 pnnx Python API
 python -m cas_ocr_model.export.export_ncnn \
     --checkpoint ./runs/8gpu_ddp/20260608_153000/best.pt \
-    --output ./runs/8gpu_ddp/20260608_153000/export/ncnn/best.fp16.pt \
+    --output ./runs/8gpu_ddp/20260608_153000/export/ncnn/mobilenet_v3_small.trislot_decoder.v2_0.fp16.pt \
     --image-size-h 64 --image-size-w 192
 
 bash scripts/export/export_all.sh
 
+# 生成 GitHub Release 资产包与清单
+python -m cas_ocr_model.export.release_bundle \
+    --checkpoint ./runs/8gpu_ddp/20260608_153000/best.pt \
+    --output-root ./runs/8gpu_ddp/20260608_153000/export/release
+
 # 校验 ONNX / ncnn 是否与 PyTorch 直接推理一致
 python scripts/export/verify_onnx_against_pytorch.py \
     --checkpoint ./runs/8gpu_ddp/20260608_153000/best.pt \
-    --onnx ./runs/8gpu_ddp/20260608_153000/export/onnx/best.fp32.onnx
+    --onnx ./runs/8gpu_ddp/20260608_153000/export/onnx/mobilenet_v3_small.trislot_decoder.v2_0.fp32.onnx
 
 python scripts/export/verify_ncnn_against_pytorch.py \
     --checkpoint ./runs/8gpu_ddp/20260608_153000/best.pt \
-    --param ./runs/8gpu_ddp/20260608_153000/export/ncnn/best.fp16.param \
-    --bin ./runs/8gpu_ddp/20260608_153000/export/ncnn/best.fp16.bin
+    --param ./runs/8gpu_ddp/20260608_153000/export/ncnn/mobilenet_v3_small.trislot_decoder.v2_0.fp16.param \
+    --bin ./runs/8gpu_ddp/20260608_153000/export/ncnn/mobilenet_v3_small.trislot_decoder.v2_0.fp16.bin
 ```

@@ -21,14 +21,14 @@ from .config import (
     load_config,
 )
 from .data import CaptchaPairDataset, collate_triple
-from .losses import LossWeights, TripleHeadLoss
+from .losses import LossWeights, TriSlotDecoderLoss
 from .model import build_model_from_checkpoint
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 from .train import evaluate
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="评估 captcha 模型 (3-head)")
+    p = argparse.ArgumentParser(description="评估 captcha 模型 (TriSlot Decoder)")
     p.add_argument("--config", type=str, default=None)
     p.add_argument("--checkpoint", type=str, required=True, help="best.pt / last.pt 路径")
     p.add_argument("--data-root", type=str, default=None)
@@ -75,7 +75,7 @@ def main() -> None:
         )
     model = accelerator.prepare(model)
 
-    loss_fn = TripleHeadLoss(
+    loss_fn = TriSlotDecoderLoss(
         weights=LossWeights(
             digit_left=cfg.loss.weight_digit_left,
             operator=cfg.loss.weight_operator,

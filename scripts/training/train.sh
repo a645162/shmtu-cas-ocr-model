@@ -26,7 +26,7 @@ if ! command -v accelerate >/dev/null 2>&1; then
 fi
 
 if [ -z "$RESUME_FROM" ] && [ "$RESUME" = "1" ]; then
-    RESOLVED_RUN_DIR="$(bash "$SCRIPT_DIR/run_path.sh" resolve)"
+    RESOLVED_RUN_DIR="$(bash "$SCRIPT_DIR/../common/run_path.sh" resolve)"
     if [ ! -d "$RESOLVED_RUN_DIR" ]; then
         echo "[train] resume run 不存在: $RESOLVED_RUN_DIR"
         exit 1
@@ -41,7 +41,7 @@ if [ -n "$RESUME_FROM" ]; then
     fi
     RUN_DIR="$(dirname "$RESUME_FROM")"
 else
-    RUN_DIR="$(bash "$SCRIPT_DIR/run_path.sh" create)"
+    RUN_DIR="$(bash "$SCRIPT_DIR/../common/run_path.sh" create)"
 fi
 
 echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS --num_machines 1 --dynamo_backend $SHMTU_DYNAMO_BACKEND"

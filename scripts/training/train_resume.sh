@@ -20,7 +20,7 @@ if ! command -v accelerate >/dev/null 2>&1; then
     exit 1
 fi
 
-RUN_DIR="$(bash "$SCRIPT_DIR/run_path.sh" resolve)"
+RUN_DIR="$(bash "$SCRIPT_DIR/../common/run_path.sh" resolve)"
 LAST_CKPT="$RUN_DIR/last.pt"
 if [ ! -f "$LAST_CKPT" ]; then
     echo "[train-resume] last checkpoint 不存在: $LAST_CKPT"

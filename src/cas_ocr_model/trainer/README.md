@@ -15,7 +15,7 @@
 ```
 trainer/
 ├── config.py     # 配置 dataclass + CLI + YAML/TOML 加载
-├── model.py      # CaptchaTripleHeadCNN (ResNet-18/34 + 3 头)
+├── model.py      # CaptchaTriSlotDecoderCNN (ResNet-18/34 + TriSlot Decoder)
 ├── data.py       # CaptchaPairDataset: 扫描 jpg+json, 灰度+二值化
 ├── losses.py     # 3-head 联合 CE + 准确率
 ├── train.py      # accelerate 训练入口 (DDP + fp16 + 线性 warmup + AdamW)

@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -53,8 +54,8 @@ from .config import (
     parse_args,
 )
 from .data import CaptchaPairDataset, collate_triple
-from .losses import LossWeights, TripleHeadLoss, compute_accuracy
-from .model import CaptchaTripleHeadCNN
+from .losses import LossWeights, TriSlotDecoderLoss, compute_accuracy
+from .model import build_model_from_config, build_model_metadata
 from cas_ocr_model.model import ModelStats
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 
@@ -456,7 +457,7 @@ def train_one_epoch(
     loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
-    loss_fn: TripleHeadLoss,
+    loss_fn: TriSlotDecoderLoss,
     grad_clip: float,
     log_every_n: int,
     epoch: int,
@@ -728,19 +729,19 @@ def main() -> None:
         )
 
     # 4) 模型 / 损失 / 优化器
-    model = CaptchaTripleHeadCNN(
-        backbone=cfg.model.backbone,
-        pretrained=cfg.model.pretrained,
-        dropout=cfg.model.dropout,
-        slot_hidden_dim=cfg.model.slot_hidden_dim,
-        slot_attention_heads=cfg.model.slot_attention_heads,
+    model_metadata = build_model_metadata(cfg_to_dict(cfg))
+    model = build_model_from_config(
+        cfg_to_dict(cfg),
         num_digit_classes=NUM_DIGIT_CLASSES,
         num_operator_classes=NUM_OPERATOR_CLASSES,
     )
     accelerator.print(
-        f"[model] backbone={cfg.model.backbone} "
+        f"[model] version={model_metadata['version']} "
+        f"family={model_metadata['family']} "
+        f"backbone={cfg.model.backbone} "
         f"pretrained={cfg.model.pretrained} "
         f"weights={describe_backbone_weights(cfg.model.backbone, cfg.model.pretrained)} "
+        f"asset_stem={model_metadata['asset_stem']} "
         f"gray_stem=rgb_mean"
     )
     if accelerator.is_main_process:
@@ -769,7 +770,7 @@ def main() -> None:
             step=0,
         )
         sync_wandb_model_stats(accelerator, model_stats)
-    loss_fn = TripleHeadLoss(
+    loss_fn = TriSlotDecoderLoss(
         weights=LossWeights(
             digit_left=cfg.loss.weight_digit_left,
             operator=cfg.loss.weight_operator,
@@ -1081,7 +1082,7 @@ def evaluate(
     accelerator: Accelerator,
     model: nn.Module,
     loader: DataLoader,
-    loss_fn: TripleHeadLoss,
+    loss_fn: TriSlotDecoderLoss,
     *,
     stage: str = "val",
     enable_rich_progress: bool = False,
@@ -1117,6 +1118,40 @@ def evaluate(
 # ----------------------------------------------------------------------------
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_pytorch_release_manifest(
+    *,
+    output_dir: Path,
+    checkpoint_path: Path,
+    model_metadata: dict[str, Any],
+) -> None:
+    manifest_path = output_dir / "release-model-assets.json"
+    manifest = {
+        "schema_version": 1,
+        "model": model_metadata,
+        "artifacts": [
+            {
+                "path": checkpoint_path.name,
+                "engine": "pytorch",
+                "precision": "fp32",
+                "format": "checkpoint",
+                "sha256": sha256_file(checkpoint_path),
+            }
+        ],
+    }
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def save_checkpoint(
     accelerator: Accelerator,
     model: nn.Module,
@@ -1147,6 +1182,8 @@ def save_checkpoint(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     unwrapped = accelerator.unwrap_model(model)
+    cfg_dict = cfg_to_dict(cfg)
+    model_metadata = build_model_metadata(cfg_dict)
     state = {
         "epoch": epoch,
         "model_state_dict": unwrapped.state_dict(),
@@ -1163,7 +1200,8 @@ def save_checkpoint(
         "early_stop_triggered": early_stop_triggered,
         "stop_reason": stop_reason,
         "metrics_history": metrics_history,
-        "config": cfg_to_dict(cfg),
+        "config": cfg_dict,
+        "model_metadata": model_metadata,
     }
     last_path = output_dir / "last.pt"
     accelerator.save(state, str(last_path))
@@ -1171,8 +1209,16 @@ def save_checkpoint(
 
     if is_best:
         best_path = output_dir / "best.pt"
+        release_path = output_dir / f"{model_metadata['asset_stem']}.pt"
         accelerator.save(state, str(best_path))
+        accelerator.save(state, str(release_path))
+        write_pytorch_release_manifest(
+            output_dir=output_dir,
+            checkpoint_path=release_path,
+            model_metadata=model_metadata,
+        )
         accelerator.print(f"[ckpt] NEW BEST -> {best_path} (val_acc={best_acc:.4f})")
+        accelerator.print(f"[ckpt] release  -> {release_path}")
 
 
 if __name__ == "__main__":

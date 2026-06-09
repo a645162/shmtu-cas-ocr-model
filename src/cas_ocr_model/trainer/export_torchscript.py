@@ -1,6 +1,6 @@
 """导出 TorchScript, 供 pnnx 转 ncnn 使用.
 
-输入: best.pt (或任意 CaptchaTripleHeadCNN 权重)
+输入: best.pt (或任意 CaptchaTriSlotDecoderCNN 权重)
 输出: traced .pt, 输入 (1, 1, H, W) float32 in [0, 1], 输出 3 个 logits tuple.
 
 用法:

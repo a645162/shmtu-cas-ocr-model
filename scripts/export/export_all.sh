@@ -12,7 +12,7 @@ if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
     export SHMTU_PROFILE_DIR="$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME"
 fi
 
-RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../run_path.sh" resolve)}"
+RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../common/run_path.sh" resolve)}"
 EXPORT_ROOT="${EXPORT_ROOT:-$RUN_DIR/export}"
 ONNX_EXPORT_DIR="${ONNX_EXPORT_DIR:-$EXPORT_ROOT/onnx}"
 NCNN_EXPORT_DIR="${NCNN_EXPORT_DIR:-$EXPORT_ROOT/ncnn}"

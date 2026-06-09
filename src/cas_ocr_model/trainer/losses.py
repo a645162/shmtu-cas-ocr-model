@@ -1,4 +1,4 @@
-"""3-head 联合损失与指标."""
+"""TriSlot Decoder 联合损失与指标."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,7 +20,7 @@ class LossWeights:
     slot_attention_variance: float = 0.0
 
 
-class TripleHeadLoss(nn.Module):
+class TriSlotDecoderLoss(nn.Module):
     """分类损失 + 槽位结构约束."""
 
     def __init__(

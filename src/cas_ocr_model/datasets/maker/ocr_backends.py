@@ -143,13 +143,22 @@ class PytorchV2Model(BasePytorchModel):
         self._inferencer = CaptchaInferencer(backend=backend, config=InferencerConfig())
 
     def _find_default_checkpoint(self) -> Path:
+        from cas_ocr_model.model import inspect_checkpoint
+
         for candidate in (Path("runs"), Path("workdir"), Path(".")):
             if not candidate.exists():
                 continue
-            matches = sorted(candidate.rglob("best.pt"))
-            if matches:
-                return matches[0].resolve()
-        raise FileNotFoundError("unable to find best.pt, please set --checkpoint")
+            for pattern in ("best.pt", "*.trislot_decoder.v*.pt", "*.pt"):
+                matches = sorted(candidate.rglob(pattern))
+                for match in matches:
+                    if match.name == "last.pt":
+                        continue
+                    try:
+                        inspect_checkpoint(match)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    return match.resolve()
+        raise FileNotFoundError("unable to find v2 checkpoint, please set --checkpoint")
 
     def warmup(self) -> None:
         blank = self._np.full((30, 100, 3), 255, dtype=self._np.uint8)

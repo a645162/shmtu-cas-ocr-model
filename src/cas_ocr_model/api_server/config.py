@@ -64,12 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--model-kind",
         choices=["v1", "v2"],
         default=_env_str("SHMTU_MODEL_KIND", "v2"),
-        help="v1 = 三模型旧版, v2 = triple-head 新版",
+        help="v1 = 三模型旧版, v2 = TriSlot Decoder 新版",
     )
     parser.add_argument(
         "--checkpoint",
         default=os.environ.get("SHMTU_CHECKPOINT"),
-        help="新版 triple-head checkpoint, 通常是 best.pt",
+        help="新版 TriSlot Decoder checkpoint, 通常是 best.pt",
     )
     parser.add_argument(
         "--v1-model-dir",

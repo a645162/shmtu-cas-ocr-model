@@ -114,7 +114,7 @@ def add_backend_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--model-name", choices=["pytorch_v1", "pytorch_v2"], default="pytorch_v1",
                    help="本地 PyTorch 模型名称")
     p.add_argument("--checkpoint", default=None,
-                   help="新版 triple-head checkpoint (best.pt)")
+                   help="新版 TriSlot Decoder checkpoint (best.pt)")
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

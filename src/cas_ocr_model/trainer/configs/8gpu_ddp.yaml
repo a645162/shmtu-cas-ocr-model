@@ -66,6 +66,7 @@ data:
     rethreshold_after_aug: true                                   # 增强后压回纯二值图
 
 model:
+  version: "2.0"                        # 当前模型版本列表: 2.0
   backbone: mobilenet_v3_small             # 可选: mobilenet_v3_small / resnet18 / resnet34
   pretrained: true               # true=加载 ImageNet 预训练; false=随机初始化
   dropout: 0.2                   # head dropout, 可尝试 0.0 ~ 0.3

@@ -1,6 +1,6 @@
 """PyTorch 推理后端.
 
-加载 trainer 训练出的 CaptchaTripleHeadCNN 权重, 单图/批量推理.
+加载 trainer 训练出的 CaptchaTriSlotDecoderCNN 权重, 单图/批量推理.
 """
 from __future__ import annotations
 

@@ -8,6 +8,6 @@
 
 默认路径约定：
 
-- `PyTorch`: `runs/.../best.pt`
-- `ONNX`: `runs/.../export/onnx/best.fp32.onnx`
-- `ncnn`: `runs/.../export/ncnn/best.fp32.param` + `best.fp32.bin`
+- `PyTorch`: `runs/.../best.pt` 或规范命名的 `runs/.../{backbone}.trislot_decoder.v{version}.pt`
+- `ONNX`: `runs/.../export/onnx/{backbone}.trislot_decoder.v{version}.fp32.onnx`
+- `ncnn`: `runs/.../export/ncnn/{backbone}.trislot_decoder.v{version}.fp32.param` + `.bin`
