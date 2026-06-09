@@ -38,6 +38,7 @@ def split_dataset(
     val_ratio: float = 0.1,
     test_ratio: float = 0.1,
     seed: int = 42,
+    max_files: int | None = None,
     source: dict | None = None,
 ) -> DatasetManifest:
     """扫描 dataset_root, 写 manifest.json.
@@ -63,6 +64,15 @@ def split_dataset(
     files = list(scan.paired_names)
     rng.shuffle(files)
 
+    if max_files is not None:
+        if max_files == 0:
+            max_files = None
+        elif max_files < 0:
+            raise ValueError(f"max_files 必须为非负整数, got {max_files}")
+    if max_files is not None:
+        if max_files < len(files):
+            files = files[:max_files]
+
     # 顺序切片
     n = len(files)
     n_train = int(n * train_ratio)
@@ -84,6 +94,7 @@ def split_dataset(
             "n_train": n_train,
             "n_val": n_val,
             "n_test": n_test,
+            "max_files": max_files,
             "seed": seed,
             "train_ratio": train_ratio,
             "val_ratio": val_ratio,
@@ -96,6 +107,7 @@ def split_dataset(
     print(f"[split] wrote manifest -> {out_path}")
     print(
         f"[split] n_total={n} n_train={n_train} n_val={n_val} n_test={n_test} "
+        f"max_files={max_files if max_files is not None else 'all'} "
         f"missing_json={len(scan.missing_json)} missing_jpg={len(scan.missing_jpg)}"
     )
     if scan.missing_json:
@@ -117,6 +129,8 @@ def main() -> None:
     p.add_argument("--val-ratio", type=float, default=0.1)
     p.add_argument("--test-ratio", type=float, default=0.1)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--max-files", type=int, default=None,
+                   help="可选: 最多使用多少个已配对样本; 0 表示不设上限. 会先按 seed 随机打乱, 再截取前 N 个")
     p.add_argument("--source-backend", type=str, default=None,
                    help="可选: 写入 manifest.source.backend (如 restful/tcp/pytorch)")
     p.add_argument("--source-url", type=str, default=None)
@@ -134,6 +148,7 @@ def main() -> None:
         val_ratio=args.val_ratio,
         test_ratio=args.test_ratio,
         seed=args.seed,
+        max_files=args.max_files,
         source=source,
     )
 

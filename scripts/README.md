@@ -20,6 +20,7 @@
 | `SHMTU_AUTO_VIS` | `1` | 训练结束后自动运行 `vis.sh`，默认用 `last.pt` 从 test split 生成可视化 |
 | `SHMTU_DISABLE_WANDB` | `0` | 设为 `1/true/yes/on` 时禁用训练自动接入 wandb |
 | `SHMTU_DYNAMO_BACKEND` | `inductor` | accelerate 的 dynamo backend; 可设为 `no` 回退到非 compile 路径 |
+| `MAX_FILES` | 空 | `split.sh` 最多使用多少个已配对样本; 会先随机选取再分割 |
 | `CAS_OCR_WEIGHTS_DIR` | `$MODEL_ROOT/weights` | PyTorch 权重缓存 (gitignore) |
 | `CAS_OCR_NUM_GPUS` | `8` | 训练 / 多卡 bench 用的 GPU 数 |
 | `CAS_OCR_PYTHON` | `python3` | Python 解释器 |
@@ -80,6 +81,10 @@ bash scripts/vis.sh                         # 可视化 test 集预测
 # 例: 采集 10000 张, 用 8 进程 × 4 协程, TCP 后端
 CAS_OCR_BACKEND=tcp COUNT=10000 PROCESSES=8 PER_PROCESS=4 \
     bash scripts/collect.sh
+
+# 例: 仅随机抽 5000 个已配对样本参与 train/val/test 分割
+MAX_FILES=5000 SEED=42 \
+    bash scripts/split.sh
 
 # 例: 训练 4 卡 (单节点), 改 profile 名称
 SHMTU_NUM_GPUS=4 SHMTU_PROFILE_NAME=exp_4gpu \

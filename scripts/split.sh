@@ -8,6 +8,7 @@ TRAIN_RATIO="${TRAIN_RATIO:-0.8}"
 VAL_RATIO="${VAL_RATIO:-0.1}"
 TEST_RATIO="${TEST_RATIO:-0.1}"
 SEED="${SEED:-42}"
+MAX_FILES="${MAX_FILES:-}"
 cd "$SHMTU_MODEL_ROOT"
 $SHMTU_PYTHON -m cas_ocr_model.datasets.split \
     --dataset-root "$SHMTU_DATASET_ROOT" \
@@ -15,5 +16,6 @@ $SHMTU_PYTHON -m cas_ocr_model.datasets.split \
     --val-ratio "$VAL_RATIO" \
     --test-ratio "$TEST_RATIO" \
     --seed "$SEED" \
+    ${MAX_FILES:+--max-files "$MAX_FILES"} \
     --source-backend "$SHMTU_BACKEND" \
     --source-url "$SHMTU_OCR_HTTP_URL"
