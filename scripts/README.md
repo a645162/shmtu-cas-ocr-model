@@ -60,7 +60,7 @@
 | `benchmark/bench_single_pytorch.sh` | 单卡速度 benchmark，PyTorch | `bash scripts/benchmark/bench_single_pytorch.sh` |
 | `benchmark/bench_single_onnx.sh` | 单卡速度 benchmark，ONNX | `bash scripts/benchmark/bench_single_onnx.sh` |
 | `benchmark/bench_single_ncnn.sh` | 单卡速度 benchmark，ncnn | `bash scripts/benchmark/bench_single_ncnn.sh` |
-| `benchmark/bench_multi.sh`      | 多卡 DDP 精度 benchmark | `bash scripts/benchmark/bench_multi.sh` |
+| `benchmark/bench_multi.sh`      | 多卡 DDP 分片推理 test 集并汇总指标，可选保存预测图片 | `bash scripts/benchmark/bench_multi.sh` |
 | `visualization/vis.sh`          | 随机抽样 test 集并导出预测图 | `bash scripts/visualization/vis.sh` |
 | `visualization/visualize_test_predictions.py` | 可视化实现脚本 | `python scripts/visualization/visualize_test_predictions.py --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml` |
 | `api/run_api_server.py`         | 启动 API server | `python scripts/api/run_api_server.py` |

@@ -4,4 +4,4 @@
 - `bench_single_pytorch.sh`: 单机 benchmark，PyTorch
 - `bench_single_onnx.sh`: 单机 benchmark，ONNX
 - `bench_single_ncnn.sh`: 单机 benchmark，ncnn
-- `bench_multi.sh`: 多卡 DDP 精度 benchmark，仅 PyTorch
+- `bench_multi.sh`: 多卡 DDP 分片推理 test 集，仅 PyTorch；可选保存预测结果图片

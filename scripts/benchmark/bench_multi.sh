@@ -12,9 +12,9 @@ fi
 
 shmtu_inference_init
 BACKEND=pytorch
-CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
 REPORT="${REPORT:-$RUN_DIR/multi_gpu_report.json}"
 LIMIT="${LIMIT:-}"
+SAVE_DIR="${SAVE_DIR:-}"
 
 if [ ! -f "$CHECKPOINT" ]; then
     echo "[bench-multi] checkpoint 不存在: $CHECKPOINT"
@@ -31,5 +31,6 @@ accelerate launch \
     --checkpoint "$CHECKPOINT" \
     --data-root "$SHMTU_DATASET_ROOT" \
     --output "$REPORT" \
+    ${SAVE_DIR:+--save-dir "$SAVE_DIR"} \
     ${LIMIT:+--limit "$LIMIT"} \
     "$@"
