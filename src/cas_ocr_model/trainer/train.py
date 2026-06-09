@@ -92,6 +92,7 @@ class TrainEpochResult:
     metrics: dict[str, float]
     global_step: int
     had_nonfinite_backprop: bool
+    had_nonfinite_gradient: bool
     nonfinite_backprop_events: int
     consecutive_nonfinite_backprop_steps: int
     stop_reason: str | None = None
@@ -549,6 +550,7 @@ def train_one_epoch(
     epoch_start = time.time()
     last_log_time = epoch_start
     had_nonfinite_backprop = False
+    had_nonfinite_gradient = False
     nonfinite_backprop_events = 0
     stop_reason = None
     optimizer.zero_grad(set_to_none=True)
@@ -589,6 +591,8 @@ def train_one_epoch(
 
                 if has_nonfinite_loss or has_nonfinite_grad:
                     had_nonfinite_backprop = True
+                    if has_nonfinite_grad:
+                        had_nonfinite_gradient = True
                     nonfinite_backprop_events += 1
                     consecutive_nonfinite_backprop_steps += 1
                     reason = "loss" if has_nonfinite_loss else "grad"
@@ -718,6 +722,7 @@ def train_one_epoch(
                 metrics=metrics,
                 global_step=global_step,
                 had_nonfinite_backprop=had_nonfinite_backprop,
+                had_nonfinite_gradient=had_nonfinite_gradient,
                 nonfinite_backprop_events=nonfinite_backprop_events,
                 consecutive_nonfinite_backprop_steps=consecutive_nonfinite_backprop_steps,
                 stop_reason=stop_reason,
@@ -728,6 +733,7 @@ def train_one_epoch(
         metrics=metrics,
         global_step=global_step,
         had_nonfinite_backprop=had_nonfinite_backprop,
+        had_nonfinite_gradient=had_nonfinite_gradient,
         nonfinite_backprop_events=nonfinite_backprop_events,
         consecutive_nonfinite_backprop_steps=consecutive_nonfinite_backprop_steps,
     )
@@ -1136,6 +1142,7 @@ def main() -> None:
         global_step = train_result.global_step
         consecutive_nonfinite_backprop_steps = train_result.consecutive_nonfinite_backprop_steps
         epoch_had_nonfinite_backprop = train_result.had_nonfinite_backprop
+        epoch_had_nonfinite_gradient = train_result.had_nonfinite_gradient
         if epoch_had_nonfinite_backprop:
             consecutive_nonfinite_backprop_epochs += 1
         else:
@@ -1190,6 +1197,7 @@ def main() -> None:
                     "early_stop_triggered": False,
                     "nonfinite_backprop_events": train_result.nonfinite_backprop_events,
                     "epoch_had_nonfinite_backprop": epoch_had_nonfinite_backprop,
+                    "epoch_had_nonfinite_gradient": epoch_had_nonfinite_gradient,
                     "consecutive_nonfinite_backprop_steps": consecutive_nonfinite_backprop_steps,
                     "consecutive_nonfinite_backprop_epochs": consecutive_nonfinite_backprop_epochs,
                     "nonfinite_backprop_step_patience": nonfinite_backprop_step_patience,
@@ -1228,6 +1236,7 @@ def main() -> None:
                     early_stop_triggered=False,
                     stop_reason=stop_reason,
                     metrics_history=metrics_history,
+                    save_latest=not epoch_had_nonfinite_gradient,
                 )
             break
 
@@ -1362,6 +1371,7 @@ def main() -> None:
                 "early_stop_triggered": early_stop_triggered,
                 "nonfinite_backprop_events": train_result.nonfinite_backprop_events,
                 "epoch_had_nonfinite_backprop": epoch_had_nonfinite_backprop,
+                "epoch_had_nonfinite_gradient": epoch_had_nonfinite_gradient,
                 "consecutive_nonfinite_backprop_steps": consecutive_nonfinite_backprop_steps,
                 "consecutive_nonfinite_backprop_epochs": consecutive_nonfinite_backprop_epochs,
                 "nonfinite_backprop_step_patience": nonfinite_backprop_step_patience,
@@ -1408,6 +1418,7 @@ def main() -> None:
                 early_stop_triggered=early_stop_triggered,
                 stop_reason=stop_reason,
                 metrics_history=metrics_history,
+                save_latest=not epoch_had_nonfinite_gradient,
             )
 
         if nonfinite_stop_triggered:
@@ -1547,6 +1558,7 @@ def save_checkpoint(
     early_stop_triggered: bool,
     stop_reason: str | None,
     metrics_history: list[dict[str, Any]],
+    save_latest: bool = True,
 ) -> None:
     """rank 0 写盘. DDP unwrap 后存 model_state_dict.
 
@@ -1583,12 +1595,18 @@ def save_checkpoint(
         "model_metadata": model_metadata,
     }
     last_path = output_dir / "last.pt"
-    accelerator.save(state, str(last_path))
-    _console.tag_print(
-        "ckpt",
-        f"saved {last_path} "
-        f"(epoch={epoch + 1}, {metrics_stage}_acc={metrics['acc_expression']:.4f})",
-    )
+    if save_latest:
+        accelerator.save(state, str(last_path))
+        _console.tag_print(
+            "ckpt",
+            f"saved {last_path} "
+            f"(epoch={epoch + 1}, {metrics_stage}_acc={metrics['acc_expression']:.4f})",
+        )
+    else:
+        _console.tag_print(
+            "ckpt",
+            f"skip {last_path} because non-finite gradient was detected in epoch={epoch + 1}",
+        )
 
     if is_best:
         best_path = output_dir / "best.pt"
