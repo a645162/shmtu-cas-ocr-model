@@ -417,6 +417,17 @@ def describe_backbone_weights(backbone: str, pretrained: bool) -> str:
         "mobilenetv3_large_100": "timm pretrained",
         "mobilenetv3_large_150d": "timm pretrained",
         "mobilenetv3_rw": "timm pretrained",
+        "repvgg_a0": "timm pretrained",
+        "repvgg_a1": "timm pretrained",
+        "repvgg_a2": "timm pretrained",
+        "repvgg_b0": "timm pretrained",
+        "repvgg_b1": "timm pretrained",
+        "repvgg_b1g4": "timm pretrained",
+        "repvgg_b2": "timm pretrained",
+        "repvgg_b2g4": "timm pretrained",
+        "repvgg_b3": "timm pretrained",
+        "repvgg_b3g4": "timm pretrained",
+        "repvgg_d2se": "timm pretrained",
     }
     if backbone.startswith("timm/"):
         return "timm pretrained"

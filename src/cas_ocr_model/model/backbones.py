@@ -9,6 +9,7 @@
     * mobilenetv3_small_050 / _075 / _100
     * mobilenetv3_large_075 / _100 / _150d
     * mobilenetv3_rw
+    * repvgg_a0 / a1 / a2 / b0 / b1 / b1g4 / b2 / b2g4 / b3 / b3g4 / d2se
     * 任意 ``timm/<model_name>`` 形式的 timm features_only backbone
 
 设计原则:
@@ -164,6 +165,17 @@ for _alias, _model_name in (
     ("mobilenetv3_large_100", "mobilenetv3_large_100"),
     ("mobilenetv3_large_150d", "mobilenetv3_large_150d"),
     ("mobilenetv3_rw", "mobilenetv3_rw"),
+    ("repvgg_a0", "repvgg_a0"),
+    ("repvgg_a1", "repvgg_a1"),
+    ("repvgg_a2", "repvgg_a2"),
+    ("repvgg_b0", "repvgg_b0"),
+    ("repvgg_b1", "repvgg_b1"),
+    ("repvgg_b1g4", "repvgg_b1g4"),
+    ("repvgg_b2", "repvgg_b2"),
+    ("repvgg_b2g4", "repvgg_b2g4"),
+    ("repvgg_b3", "repvgg_b3"),
+    ("repvgg_b3g4", "repvgg_b3g4"),
+    ("repvgg_d2se", "repvgg_d2se"),
 ):
     _register_timm_alias(_alias, _model_name)
 
