@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 from accelerate import Accelerator
 from accelerate.utils import set_seed
 
+from cas_ocr_model.common.console import AcceleratorConsole
 from .config import (
     FullConfig,
     load_config,
@@ -68,10 +69,11 @@ def main() -> None:
     )
 
     model = build_model_from_checkpoint(args.checkpoint, device=accelerator.device)
+    console = AcceleratorConsole(accelerator)
     if accelerator.is_main_process:
-        accelerator.print(
-            f"[model-stats] "
-            f"{format_model_stats(collect_model_stats(model, cfg.data.image_size_h, cfg.data.image_size_w))}"
+        console.tag_print(
+            "model-stats",
+            f"{format_model_stats(collect_model_stats(model, cfg.data.image_size_h, cfg.data.image_size_w))}",
         )
     model = accelerator.prepare(model)
 
@@ -89,14 +91,15 @@ def main() -> None:
     )
     metrics = evaluate(accelerator, model, val_loader, loss_fn)
 
-    accelerator.print(
-        f"[eval] checkpoint={args.checkpoint} "
+    console.tag_print(
+        "eval",
+        f"checkpoint={args.checkpoint} "
         f"n_val={len(val_ds)} "
         f"loss={metrics['loss']:.4f} "
         f"acc_dl={metrics['acc_digit_left']:.4f} "
         f"acc_op={metrics['acc_operator']:.4f} "
         f"acc_dr={metrics['acc_digit_right']:.4f} "
-        f"acc_full={metrics['acc_expression']:.4f}"
+        f"acc_full={metrics['acc_expression']:.4f}",
     )
     accelerator.end_training()
 

@@ -20,6 +20,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
+from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 from cas_ocr_model.trainer.model import build_model_from_checkpoint
 
@@ -74,21 +75,21 @@ def main() -> None:
 
     model = build_model_from_checkpoint(args.checkpoint, device="cpu")
     model.eval()
-    print(
-        f"[model-stats] "
-        f"{format_model_stats(collect_model_stats(model, args.image_size_h, args.image_size_w))}"
+    tag_print(
+        "model-stats",
+        f"{format_model_stats(collect_model_stats(model, args.image_size_h, args.image_size_w))}",
     )
 
     wrapper = ExportWrapper(model)
     wrapper.eval()
     dummy = torch.randn(1, 1, args.image_size_h, args.image_size_w, dtype=torch.float32)
 
-    print(f"[export-ncnn-python] checkpoint = {args.checkpoint}")
-    print(f"[export-ncnn-python] output     = {output_path}")
-    print(f"[export-ncnn-python] precision  = {args.precision}")
-    print(f"[export-ncnn-python] inputshape = {(1, 1, args.image_size_h, args.image_size_w)}")
-    print(f"[export-ncnn-python] ncnnparam  = {ncnn_param}")
-    print(f"[export-ncnn-python] ncnnbin    = {ncnn_bin}")
+    tag_print("export-ncnn-python", f"checkpoint = {args.checkpoint}")
+    tag_print("export-ncnn-python", f"output     = {output_path}")
+    tag_print("export-ncnn-python", f"precision  = {args.precision}")
+    tag_print("export-ncnn-python", f"inputshape = {(1, 1, args.image_size_h, args.image_size_w)}")
+    tag_print("export-ncnn-python", f"ncnnparam  = {ncnn_param}")
+    tag_print("export-ncnn-python", f"ncnnbin    = {ncnn_bin}")
     pnnx.export(
         wrapper,
         str(output_path),
@@ -102,9 +103,9 @@ def main() -> None:
         ncnnparam=str(ncnn_param),
         ncnnbin=str(ncnn_bin),
     )
-    print(f"[export-ncnn-python] done -> {output_path}")
-    print(f"[export-ncnn-python] expect   -> {ncnn_param}")
-    print(f"[export-ncnn-python] expect   -> {ncnn_bin}")
+    tag_print("export-ncnn-python", f"done -> {output_path}")
+    tag_print("export-ncnn-python", f"expect   -> {ncnn_param}")
+    tag_print("export-ncnn-python", f"expect   -> {ncnn_bin}")
 
 
 if __name__ == "__main__":

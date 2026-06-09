@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 
 from .model import build_model_from_checkpoint
+from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 
 
@@ -40,9 +41,9 @@ def main() -> None:
 
     model = build_model_from_checkpoint(args.checkpoint, device="cpu")
     model.eval()
-    print(
-        f"[model-stats] "
-        f"{format_model_stats(collect_model_stats(model, args.image_size_h, args.image_size_w))}"
+    tag_print(
+        "model-stats",
+        f"{format_model_stats(collect_model_stats(model, args.image_size_h, args.image_size_w))}",
     )
 
     wrapper = ExportWrapper(model)
@@ -50,7 +51,7 @@ def main() -> None:
     dummy = torch.randn(1, 1, args.image_size_h, args.image_size_w, dtype=torch.float32)
     traced = torch.jit.trace(wrapper, dummy, strict=True)
     traced.save(args.output)
-    print(f"[export] saved -> {args.output}")
+    tag_print("export", f"saved -> {args.output}")
 
 
 if __name__ == "__main__":

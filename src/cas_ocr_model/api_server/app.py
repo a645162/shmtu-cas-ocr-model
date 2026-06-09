@@ -11,6 +11,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlparse
 
+from cas_ocr_model.common.console import tag_print
+
 from .config import ApiServerConfig, parse_args
 from .service import OcrService, QueueFullError
 
@@ -243,18 +245,16 @@ def run_servers(config: ApiServerConfig) -> int:
         thread.start()
 
     status = service.status_payload()
-    print(
-        "[api-server] started",
-        f"http={config.http_host}:{config.http_port}",
-        f"tcp={config.tcp_host}:{config.tcp_port}",
-        f"model_kind={config.model_kind}",
-        f"device={config.device}",
-        f"workers={status['poolSize']}",
-        f"queue_capacity={status['queueCapacity']}",
+    tag_print(
+        "api-server",
+        f"started http={config.http_host}:{config.http_port} "
+        f"tcp={config.tcp_host}:{config.tcp_port} "
+        f"model_kind={config.model_kind} device={config.device} "
+        f"workers={status['poolSize']} queue_capacity={status['queueCapacity']} "
         f"models_loaded={status['modelsLoaded']}",
     )
     if service.init_error:
-        print(f"[api-server] init_error: {service.init_error}")
+        tag_print("api-server", f"init_error: {service.init_error}")
 
     try:
         while not stop_event.is_set():

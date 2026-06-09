@@ -15,6 +15,8 @@ from typing import Optional
 import numpy as np
 import torch
 
+from cas_ocr_model.common.console import print_benchmark_table
+
 from .inference import CaptchaInferencer
 
 
@@ -153,23 +155,16 @@ def report_to_dict(r: BenchmarkReport) -> dict:
 
 
 def print_report(r: BenchmarkReport) -> None:
-    print("=" * 72)
-    print(f"[benchmark] backend={r.backend_name} device={r.device} image={r.image_size}")
-    print(f"[env] python={r.python_version} torch={r.torch_version}")
-    print("-" * 72)
-    s = r.single_latency
-    print(
-        f"[single bs=1] mean={s.mean_ms:.2f}ms p50={s.p50_ms:.2f}ms "
-        f"p90={s.p90_ms:.2f}ms p99={s.p99_ms:.2f}ms "
-        f"qps={r.single_throughput_qps:.1f}"
+    print_benchmark_table(
+        title="Benchmark",
+        backend=r.backend_name,
+        device=r.device,
+        image_size=r.image_size,
+        python_version=r.python_version,
+        torch_version=r.torch_version,
+        single_stats=asdict(r.single_latency),
+        single_qps=r.single_throughput_qps,
+        batch_scan={bs: asdict(stats) for bs, stats in r.batch_scan.items()},
+        batch_throughput=r.batch_scan_throughput,
+        peak_memory_mb=r.peak_memory_mb,
     )
-    print("-" * 72)
-    print(f"{'bs':>6} | {'mean_ms':>8} | {'p50_ms':>8} | {'p90_ms':>8} | {'p99_ms':>8} | {'qps':>10}")
-    for bs, stats in r.batch_scan.items():
-        qps = r.batch_scan_throughput[bs]
-        print(
-            f"{bs:>6} | {stats.mean_ms:>8.2f} | {stats.p50_ms:>8.2f} | "
-            f"{stats.p90_ms:>8.2f} | {stats.p99_ms:>8.2f} | {qps:>10.1f}"
-        )
-    print(f"[peak memory] {r.peak_memory_mb:.1f} MB")
-    print("=" * 72)

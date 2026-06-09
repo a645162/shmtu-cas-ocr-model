@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.trainer.config import DIGIT_LABELS, OPERATOR_LABELS
 
 try:
@@ -68,10 +69,10 @@ class NcnnBackend:
                     f"output_names 数量错误: 期望 {len(HEAD_NAMES)} 个, 实际 {len(self.output_names)}"
                 )
 
-        print(f"[ncnn-backend] param      = {self.param_path}")
-        print(f"[ncnn-backend] bin        = {self.bin_path}")
-        print(f"[ncnn-backend] input      = {self.input_name}")
-        print(f"[ncnn-backend] outputs    = {self.output_names}")
+        tag_print("ncnn-backend", f"param      = {self.param_path}")
+        tag_print("ncnn-backend", f"bin        = {self.bin_path}")
+        tag_print("ncnn-backend", f"input      = {self.input_name}")
+        tag_print("ncnn-backend", f"outputs    = {self.output_names}")
 
     def infer(self, image: torch.Tensor) -> dict[str, np.ndarray]:
         batch = np.ascontiguousarray(image.detach().cpu().numpy(), dtype=np.float32)

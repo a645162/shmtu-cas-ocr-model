@@ -21,6 +21,7 @@ from typing import Any
 
 import torch
 
+from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.model import inspect_checkpoint
 
 
@@ -105,7 +106,7 @@ def infer_image_sizes(checkpoint: Path, *, override_h: int | None, override_w: i
 
 
 def run_command(args: list[str]) -> None:
-    print(f"[release-export] run: {' '.join(args)}")
+    tag_print("release-export", f"run: {' '.join(args)}")
     subprocess.run(args, check=True)
 
 
@@ -285,7 +286,7 @@ def main() -> None:
         checkpoint_sha256 = sha256_file(checkpoint)
         if asset_stem in used_asset_stems:
             if used_asset_stems[asset_stem] == checkpoint_sha256:
-                print(f"[release-export] skip duplicate checkpoint: {checkpoint} -> {asset_stem}")
+                tag_print("release-export", f"skip duplicate checkpoint: {checkpoint} -> {asset_stem}")
                 continue
             raise SystemExit(f"重复的 release asset_stem 且内容不同: {asset_stem}")
         used_asset_stems[asset_stem] = checkpoint_sha256
@@ -365,7 +366,7 @@ def main() -> None:
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(f"[release-export] manifest -> {manifest_path}")
+    tag_print("release-export", f"manifest -> {manifest_path}")
 
 
 if __name__ == "__main__":

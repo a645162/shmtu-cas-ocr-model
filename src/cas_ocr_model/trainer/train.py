@@ -60,6 +60,8 @@ from .model import build_model_from_config, build_model_metadata
 from cas_ocr_model.model import ModelStats
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 
+from cas_ocr_model.common.console import AcceleratorConsole
+
 try:
     from rich.progress import (
         BarColumn,
@@ -534,7 +536,10 @@ def train_one_epoch(
     enable_rich_progress: bool,
     nonfinite_backprop_step_patience: int,
     consecutive_nonfinite_backprop_steps: int,
+    console: AcceleratorConsole | None = None,
 ) -> TrainEpochResult:
+    if console is None:
+        console = AcceleratorConsole(accelerator)
     model.train()
     metric_sum = make_metric_sum()
     window_sum = make_metric_sum()
@@ -592,14 +597,15 @@ def train_one_epoch(
                         detail = " local=loss"
                     elif local_nonfinite_grad_name:
                         detail = f" local_grad={local_nonfinite_grad_name}"
-                    accelerator.print(
-                        f"[nonfinite-backprop] epoch={epoch}/{total_epochs} "
+                    console.tag_print(
+                        "nonfinite-backprop",
+                        f"epoch={epoch}/{total_epochs} "
                         f"loader_step={loader_step}/{len(loader)} "
                         f"update_step={epoch_update_step}/{steps_per_epoch} "
                         f"global_step={global_step} "
                         f"reason={reason} "
                         f"consecutive_steps={consecutive_nonfinite_backprop_steps}"
-                        f"{detail}"
+                        f"{detail}",
                     )
                     maybe_log_metrics(
                         accelerator,
@@ -619,11 +625,12 @@ def train_one_epoch(
                         and consecutive_nonfinite_backprop_steps >= nonfinite_backprop_step_patience
                     ):
                         stop_reason = NONFINITE_BACKPROP_STEP_STOP
-                        accelerator.print(
-                            f"[nonfinite-stop] triggered by consecutive steps at "
+                        console.tag_print(
+                            "nonfinite-stop",
+                            f"triggered by consecutive steps at "
                             f"epoch={epoch} loader_step={loader_step} "
                             f"consecutive_steps={consecutive_nonfinite_backprop_steps} "
-                            f"patience={nonfinite_backprop_step_patience}"
+                            f"patience={nonfinite_backprop_step_patience}",
                         )
                         break
                     continue
@@ -672,8 +679,9 @@ def train_one_epoch(
                     refresh=True,
                 )
             else:
-                accelerator.print(
-                    f"[train] epoch={epoch}/{total_epochs} "
+                console.tag_print(
+                    "train",
+                    f"epoch={epoch}/{total_epochs} "
                     f"step={epoch_update_step}/{steps_per_epoch} "
                     f"global_step={global_step} "
                     f"loss={window_metrics['loss']:.4f} "
@@ -683,7 +691,7 @@ def train_one_epoch(
                     f"acc_dr={window_metrics['acc_digit_right']:.4f} "
                     f"lr={lr:.2e} "
                     f"throughput={samples_per_s:.1f}img/s "
-                    f"eta={format_seconds(eta_seconds)}"
+                    f"eta={format_seconds(eta_seconds)}",
                 )
 
             maybe_log_metrics(
@@ -768,10 +776,13 @@ def main() -> None:
         * accelerator.num_processes
         * cfg.train.gradient_accumulation_steps
     )
-    accelerator.print(
-        f"[init] rank={accelerator.process_index} world_size={accelerator.num_processes} "
+    console = AcceleratorConsole(accelerator)
+
+    console.tag_print(
+        "init",
+        f"rank={accelerator.process_index} world_size={accelerator.num_processes} "
         f"device={accelerator.device} mixed_precision={cfg.train.mixed_precision} "
-        f"grad_accum={cfg.train.gradient_accumulation_steps}"
+        f"grad_accum={cfg.train.gradient_accumulation_steps}",
     )
     if accelerator.is_main_process:
         maybe_log_metrics(
@@ -782,13 +793,14 @@ def main() -> None:
             },
             step=0,
         )
-        accelerator.print(
-            f"[config] output={cfg.train.output_dir} data={cfg.data.data_root} "
+        console.tag_print(
+            "config",
+            f"output={cfg.train.output_dir} data={cfg.data.data_root} "
             f"backbone={cfg.model.backbone} batch/device={cfg.train.per_device_batch_size} "
             f"effective_batch={effective_batch_size} tracker={report_to or 'none'} "
-            f"(raw={cfg.train.report_to}, reason={tracker_resolution})"
+            f"(raw={cfg.train.report_to}, reason={tracker_resolution})",
         )
-        accelerator.print(f"[config] {cfg_to_dict(cfg)}")
+        console.tag_print("config", f"{cfg_to_dict(cfg)}")
 
     # 3) 数据 (按 manifest 读取 train/val/test)
     train_ds = CaptchaPairDataset(
@@ -830,13 +842,14 @@ def main() -> None:
                 split="test",
             )
         except RuntimeError as e:
-            accelerator.print(f"[data] test split unavailable: {e}; skipping")
+            console.tag_print("data", f"test split unavailable: {e}; skipping")
             test_ds = None
-    accelerator.print(
-        f"[data] train={len(train_ds)} val={len(val_ds)} "
+    console.tag_print(
+        "data",
+        f"train={len(train_ds)} val={len(val_ds)} "
         f"test={len(test_ds) if test_ds else 0} "
         f"image_size=({cfg.data.image_size_h},{cfg.data.image_size_w}) "
-        f"binarize={cfg.data.binarize_mode}"
+        f"binarize={cfg.data.binarize_mode}",
     )
     if accelerator.is_main_process:
         maybe_log_metrics(
@@ -889,20 +902,21 @@ def main() -> None:
         num_digit_classes=NUM_DIGIT_CLASSES,
         num_operator_classes=NUM_OPERATOR_CLASSES,
     )
-    accelerator.print(
-        f"[model] version={model_metadata['version']} "
+    console.tag_print(
+        "model",
+        f"version={model_metadata['version']} "
         f"family={model_metadata['family']} "
         f"backbone={cfg.model.backbone} "
         f"pretrained={cfg.model.pretrained} "
         f"weights={describe_backbone_weights(cfg.model.backbone, cfg.model.pretrained)} "
         f"asset_stem={model_metadata['asset_stem']} "
-        f"gray_stem=rgb_mean"
+        f"gray_stem=rgb_mean",
     )
     if accelerator.is_main_process:
         model_stats = collect_model_stats(model, cfg.data.image_size_h, cfg.data.image_size_w)
-        accelerator.print(
-            f"[model-stats] "
-            f"{format_model_stats(model_stats)}"
+        console.tag_print(
+            "model-stats",
+            f"{format_model_stats(model_stats)}",
         )
         maybe_log_metrics(
             accelerator,
@@ -994,20 +1008,22 @@ def main() -> None:
         cfg.train.nonfinite_backprop_epoch_patience,
     )
     if early_stop_patience == 0:
-        accelerator.print("[early-stop] disabled (train.early_stop_patience=0)")
+        console.tag_print("early-stop", "disabled (train.early_stop_patience=0)")
     elif cfg.train.early_stop_patience == -1:
-        accelerator.print(
-            f"[early-stop] enabled raw=-1 resolved_patience={early_stop_patience} "
-            f"(20% of epochs={cfg.train.epochs})"
+        console.tag_print(
+            "early-stop",
+            f"enabled raw=-1 resolved_patience={early_stop_patience} "
+            f"(20% of epochs={cfg.train.epochs})",
         )
     else:
-        accelerator.print(f"[early-stop] enabled patience={early_stop_patience}")
+        console.tag_print("early-stop", f"enabled patience={early_stop_patience}")
     if nonfinite_backprop_step_patience == 0 and nonfinite_backprop_epoch_patience == 0:
-        accelerator.print("[nonfinite-backprop-stop] disabled (both patience=0)")
+        console.tag_print("nonfinite-stop", "disabled (both patience=0)")
     else:
-        accelerator.print(
-            f"[nonfinite-backprop-stop] step_patience={nonfinite_backprop_step_patience} "
-            f"epoch_patience={nonfinite_backprop_epoch_patience}"
+        console.tag_print(
+            "nonfinite-stop",
+            f"step_patience={nonfinite_backprop_step_patience} "
+            f"epoch_patience={nonfinite_backprop_epoch_patience}",
         )
     if cfg.train.resume_from:
         ckpt = torch.load(cfg.train.resume_from, map_location="cpu")
@@ -1040,13 +1056,14 @@ def main() -> None:
             epochs_without_improve = inferred_stale_epochs
         if metrics_history and (not math.isfinite(best_val_loss) or best_val_loss == float("inf")):
             best_val_loss, best_val_loss_epoch = infer_best_val_loss_state(metrics_history)
-        accelerator.print(
-            f"[resume] from {cfg.train.resume_from} epoch={start_epoch} "
+        console.tag_print(
+            "resume",
+            f"from {cfg.train.resume_from} epoch={start_epoch} "
             f"best={best_acc:.4f} best_epoch={best_epoch} "
             f"best_val_loss={best_val_loss:.4f} best_val_loss_epoch={best_val_loss_epoch} "
             f"stale_epochs={epochs_without_improve} "
             f"nonfinite_steps={consecutive_nonfinite_backprop_steps} "
-            f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}"
+            f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}",
         )
     elif metrics_history:
         inferred_best_acc, inferred_stale_epochs, inferred_best_epoch = infer_early_stop_state(metrics_history)
@@ -1056,9 +1073,10 @@ def main() -> None:
         epochs_without_improve = inferred_stale_epochs
 
     if early_stop_patience > 0 and epochs_without_improve >= early_stop_patience:
-        accelerator.print(
-            f"[early-stop] checkpoint already reached patience: "
-            f"stale_epochs={epochs_without_improve} patience={early_stop_patience}; skip training"
+        console.tag_print(
+            "early-stop",
+            f"checkpoint already reached patience: "
+            f"stale_epochs={epochs_without_improve} patience={early_stop_patience}; skip training",
         )
         accelerator.wait_for_everyone()
         accelerator.end_training()
@@ -1067,10 +1085,11 @@ def main() -> None:
         nonfinite_backprop_step_patience > 0
         and consecutive_nonfinite_backprop_steps >= nonfinite_backprop_step_patience
     ):
-        accelerator.print(
-            f"[nonfinite-stop] checkpoint already reached step patience: "
+        console.tag_print(
+            "nonfinite-stop",
+            f"checkpoint already reached step patience: "
             f"consecutive_steps={consecutive_nonfinite_backprop_steps} "
-            f"patience={nonfinite_backprop_step_patience}; skip training"
+            f"patience={nonfinite_backprop_step_patience}; skip training",
         )
         accelerator.wait_for_everyone()
         accelerator.end_training()
@@ -1079,10 +1098,11 @@ def main() -> None:
         nonfinite_backprop_epoch_patience > 0
         and consecutive_nonfinite_backprop_epochs >= nonfinite_backprop_epoch_patience
     ):
-        accelerator.print(
-            f"[nonfinite-stop] checkpoint already reached epoch patience: "
+        console.tag_print(
+            "nonfinite-stop",
+            f"checkpoint already reached epoch patience: "
             f"consecutive_epochs={consecutive_nonfinite_backprop_epochs} "
-            f"patience={nonfinite_backprop_epoch_patience}; skip training"
+            f"patience={nonfinite_backprop_epoch_patience}; skip training",
         )
         accelerator.wait_for_everyone()
         accelerator.end_training()
@@ -1091,7 +1111,7 @@ def main() -> None:
     # 7) 训练循环
     enable_rich_progress = should_use_rich_progress(accelerator, cfg)
     for epoch in range(start_epoch, cfg.train.epochs):
-        accelerator.print(f"\n[epoch {epoch + 1}/{cfg.train.epochs}]")
+        console.rule(f"Epoch {epoch + 1}/{cfg.train.epochs}", style="bold blue")
         t0 = time.time()
 
         train_result = train_one_epoch(
@@ -1110,6 +1130,7 @@ def main() -> None:
             enable_rich_progress=enable_rich_progress,
             nonfinite_backprop_step_patience=nonfinite_backprop_step_patience,
             consecutive_nonfinite_backprop_steps=consecutive_nonfinite_backprop_steps,
+            console=console,
         )
         train_metrics = train_result.metrics
         global_step = train_result.global_step
@@ -1127,15 +1148,16 @@ def main() -> None:
 
         if train_result.stop_reason == NONFINITE_BACKPROP_STEP_STOP:
             stop_reason = train_result.stop_reason
-            accelerator.print(
-                f"[epoch-summary] epoch={epoch + 1}/{cfg.train.epochs} "
+            console.tag_print(
+                "epoch-summary",
+                f"epoch={epoch + 1}/{cfg.train.epochs} "
                 f"train_loss={train_metrics['loss']:.4f} "
                 f"train_acc_full={train_metrics['acc_expression']:.4f} "
                 f"time={train_time:.1f}s "
                 f"stop_reason={stop_reason} "
                 f"nonfinite_events={train_result.nonfinite_backprop_events} "
                 f"nonfinite_steps={consecutive_nonfinite_backprop_steps} "
-                f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}"
+                f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}",
             )
             maybe_log_metrics(
                 accelerator,
@@ -1233,13 +1255,15 @@ def main() -> None:
         )
         nonfinite_stop_triggered = nonfinite_epoch_stop_triggered
         if nonfinite_stop_triggered:
-            accelerator.print(
-                f"[nonfinite-stop] triggered by consecutive epochs at "
+            console.tag_print(
+                "nonfinite-stop",
+                f"triggered by consecutive epochs at "
                 f"epoch={epoch + 1} consecutive_epochs={consecutive_nonfinite_backprop_epochs} "
-                f"patience={nonfinite_backprop_epoch_patience}"
+                f"patience={nonfinite_backprop_epoch_patience}",
             )
-        accelerator.print(
-            f"[epoch-summary] epoch={epoch + 1}/{cfg.train.epochs} "
+        console.tag_print(
+            "epoch-summary",
+            f"epoch={epoch + 1}/{cfg.train.epochs} "
             f"train_loss={train_metrics['loss']:.4f} "
             f"train_acc_full={train_metrics['acc_expression']:.4f} "
             f"val_loss={val_metrics['loss']:.4f} "
@@ -1251,7 +1275,7 @@ def main() -> None:
             f"stale_epochs={epochs_without_improve} "
             f"nonfinite_events={train_result.nonfinite_backprop_events} "
             f"nonfinite_steps={consecutive_nonfinite_backprop_steps} "
-            f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}"
+            f"nonfinite_epochs={consecutive_nonfinite_backprop_epochs}",
         )
         maybe_log_metrics(
             accelerator,
@@ -1298,13 +1322,14 @@ def main() -> None:
                 stage="test",
                 enable_rich_progress=enable_rich_progress,
             )
-            accelerator.print(
-                f"[test][final] "
+            console.tag_print(
+                "test",
+                f"final "
                 f"loss={test_metrics['loss']:.4f} "
                 f"acc_dl={test_metrics['acc_digit_left']:.4f} "
                 f"acc_op={test_metrics['acc_operator']:.4f} "
                 f"acc_dr={test_metrics['acc_digit_right']:.4f} "
-                f"acc_full={test_metrics['acc_expression']:.4f}"
+                f"acc_full={test_metrics['acc_expression']:.4f}",
             )
             maybe_log_metrics(
                 accelerator,
@@ -1388,13 +1413,14 @@ def main() -> None:
         if nonfinite_stop_triggered:
             break
         if early_stop_triggered:
-            accelerator.print(
-                f"[early-stop] triggered at epoch={epoch + 1} "
-                f"stale_epochs={epochs_without_improve} patience={early_stop_patience}"
+            console.tag_print(
+                "early-stop",
+                f"triggered at epoch={epoch + 1} "
+                f"stale_epochs={epochs_without_improve} patience={early_stop_patience}",
             )
             break
 
-    accelerator.print("[done] training complete")
+    console.success("training complete")
     accelerator.wait_for_everyone()
     accelerator.end_training()
 
@@ -1528,6 +1554,7 @@ def save_checkpoint(
         output_dir/last.pt
         output_dir/best.pt (仅当 is_best)
     """
+    _console = AcceleratorConsole(accelerator)
     output_dir = Path(cfg.train.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1557,9 +1584,10 @@ def save_checkpoint(
     }
     last_path = output_dir / "last.pt"
     accelerator.save(state, str(last_path))
-    accelerator.print(
-        f"[ckpt] saved {last_path} "
-        f"(epoch={epoch + 1}, {metrics_stage}_acc={metrics['acc_expression']:.4f})"
+    _console.tag_print(
+        "ckpt",
+        f"saved {last_path} "
+        f"(epoch={epoch + 1}, {metrics_stage}_acc={metrics['acc_expression']:.4f})",
     )
 
     if is_best:
@@ -1575,8 +1603,8 @@ def save_checkpoint(
             checkpoint_path=release_path,
             model_metadata=model_metadata,
         )
-        accelerator.print(f"[ckpt] NEW BEST -> {best_path} (val_acc={best_acc:.4f})")
-        accelerator.print(f"[ckpt] release  -> {release_path}")
+        _console.tag_print("ckpt", f"NEW BEST -> {best_path} (val_acc={best_acc:.4f})")
+        _console.tag_print("ckpt", f"release  -> {release_path}")
 
 
 if __name__ == "__main__":

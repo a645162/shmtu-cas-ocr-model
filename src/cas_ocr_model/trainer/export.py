@@ -20,6 +20,7 @@ import torch
 import torch.nn as nn
 
 from .model import build_model_from_checkpoint
+from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 
 
@@ -88,9 +89,9 @@ def main() -> None:
 
     model = build_model_from_checkpoint(args.checkpoint, device=device)
     model.eval()
-    print(
-        f"[model-stats] "
-        f"{format_model_stats(collect_model_stats(model, args.image_size_h, args.image_size_w))}"
+    tag_print(
+        "model-stats",
+        f"{format_model_stats(collect_model_stats(model, args.image_size_h, args.image_size_w))}",
     )
     wrapper = ExportWrapper(model).to(device=device, dtype=export_dtype)
     if export_dtype == torch.float16:
@@ -113,7 +114,7 @@ def main() -> None:
     if needs_cpu_fp16_conversion:
         tmp_dir = tempfile.TemporaryDirectory(prefix="cas_ocr_onnx_fp16_")
         export_target = str(Path(tmp_dir.name) / "model.fp32.onnx")
-        print("[export] fp16 onnx: CUDA 不可用，切换为 CPU 上先导出 fp32 再转换为 fp16")
+        tag_print("export", "fp16 onnx: CUDA 不可用，切换为 CPU 上先导出 fp32 再转换为 fp16")
 
     torch.onnx.export(
         wrapper,
@@ -130,7 +131,7 @@ def main() -> None:
         convert_onnx_fp32_to_fp16(export_target, args.output)
         if tmp_dir is not None:
             tmp_dir.cleanup()
-    print(f"[export] saved -> {args.output}")
+    tag_print("export", f"saved -> {args.output}")
 
 
 if __name__ == "__main__":

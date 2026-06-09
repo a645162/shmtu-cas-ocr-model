@@ -23,6 +23,8 @@ import json
 import sys
 from pathlib import Path
 
+from cas_ocr_model.common.console import tag_print, get_console
+
 from .inference import CaptchaInferencer, InferencerConfig
 
 
@@ -136,13 +138,13 @@ def cmd_predict(args: argparse.Namespace) -> int:
             }
             records.append(record)
             print(json.dumps(record, ensure_ascii=False))
-        print(f"[done] {len(items)} samples", file=sys.stderr)
+        tag_print("done", f"{len(items)} samples")
 
     if args.output and records:
         Path(args.output).write_text(
             json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        print(f"[saved] {args.output}", file=sys.stderr)
+        tag_print("saved", str(args.output))
     return 0
 
 
@@ -165,21 +167,22 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     report = metrics_to_dict(metrics)
 
     # 命令行可读摘要
-    print(
-        f"[eval] n={metrics.n_samples} "
+    tag_print(
+        "eval",
+        f"n={metrics.n_samples} "
         f"acc_dl={metrics.acc_digit_left:.4f} "
         f"acc_op={metrics.acc_operator:.4f} "
         f"acc_dr={metrics.acc_digit_right:.4f} "
         f"acc_full={metrics.acc_expression:.4f} "
         f"acc_eval={metrics.acc_eval_result:.4f} "
-        f"ece={metrics.ece:.4f}"
+        f"ece={metrics.ece:.4f}",
     )
 
     if args.output:
         Path(args.output).write_text(
             json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        print(f"[saved] {args.output}", file=sys.stderr)
+        tag_print("saved", str(args.output))
     return 0
 
 
@@ -212,7 +215,7 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         Path(args.output).write_text(
             json.dumps(report_to_dict(rpt), ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        print(f"[saved] {args.output}", file=sys.stderr)
+        tag_print("saved", str(args.output))
     return 0
 
 

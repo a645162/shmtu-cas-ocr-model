@@ -24,6 +24,8 @@ import random
 import time
 from pathlib import Path
 
+from cas_ocr_model.common.console import tag_print
+
 from .format import DatasetManifest, scan_dataset
 
 
@@ -104,16 +106,17 @@ def split_dataset(
     )
 
     out_path = manifest.save(dataset_root)
-    print(f"[split] wrote manifest -> {out_path}")
-    print(
-        f"[split] n_total={n} n_train={n_train} n_val={n_val} n_test={n_test} "
+    tag_print("split", f"wrote manifest -> {out_path}")
+    tag_print(
+        "split",
+        f"n_total={n} n_train={n_train} n_val={n_val} n_test={n_test} "
         f"max_files={max_files if max_files is not None else 'all'} "
-        f"missing_json={len(scan.missing_json)} missing_jpg={len(scan.missing_jpg)}"
+        f"missing_json={len(scan.missing_json)} missing_jpg={len(scan.missing_jpg)}",
     )
     if scan.missing_json:
-        print(f"[split][WARN] {len(scan.missing_json)} 个 jpg 缺 json, 已跳过")
+        tag_print("WARN", f"{len(scan.missing_json)} 个 jpg 缺 json, 已跳过")
     if scan.missing_jpg:
-        print(f"[split][WARN] {len(scan.missing_jpg)} 个 json 缺 jpg, 已跳过")
+        tag_print("WARN", f"{len(scan.missing_jpg)} 个 json 缺 jpg, 已跳过")
     return manifest
 
 

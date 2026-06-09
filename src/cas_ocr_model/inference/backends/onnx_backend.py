@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.trainer.config import DIGIT_LABELS, OPERATOR_LABELS
 
 try:
@@ -48,10 +49,10 @@ class OnnxBackend:
         self.output_names = [output.name for output in self.session.get_outputs()]
         self.output_name_map = self._build_output_name_map(self.output_names)
 
-        print(f"[onnx-backend] model      = {self.onnx_path}")
-        print(f"[onnx-backend] provider   = {self.providers}")
-        print(f"[onnx-backend] input      = {self.input_name} ({self.input_type})")
-        print(f"[onnx-backend] outputs    = {self.output_names}")
+        tag_print("onnx-backend", f"model      = {self.onnx_path}")
+        tag_print("onnx-backend", f"provider   = {self.providers}")
+        tag_print("onnx-backend", f"input      = {self.input_name} ({self.input_type})")
+        tag_print("onnx-backend", f"outputs    = {self.output_names}")
 
     @staticmethod
     def _build_output_name_map(output_names: list[str]) -> dict[str, str]:

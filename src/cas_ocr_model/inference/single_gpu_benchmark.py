@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import json
 import platform
-import sys
 import time
 import tracemalloc
 from dataclasses import asdict, dataclass, field
@@ -24,6 +23,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
+
+from cas_ocr_model.common.console import print_benchmark_table, tag_print
 
 from .inference import CaptchaInferencer, InferencerConfig
 
@@ -149,26 +150,19 @@ def run_benchmark(
 
 
 def print_report(r: SingleGpuReport) -> None:
-    print("=" * 72)
-    print(f"[single-gpu-bench] backend={r.backend} device={r.device} image={r.image_size}")
-    print(f"[env] python={r.python_version} torch={r.torch_version}")
-    print("-" * 72)
-    s = r.single["latency_ms"]
-    print(
-        f"[bs=1] mean={s['mean_ms']:.2f}ms p50={s['p50_ms']:.2f}ms "
-        f"p90={s['p90_ms']:.2f}ms p99={s['p99_ms']:.2f}ms "
-        f"qps={r.single['throughput_qps']:.1f}"
+    print_benchmark_table(
+        title="Single-GPU Benchmark",
+        backend=r.backend,
+        device=r.device,
+        image_size=r.image_size,
+        python_version=r.python_version,
+        torch_version=r.torch_version,
+        single_stats=r.single["latency_ms"],
+        single_qps=r.single["throughput_qps"],
+        batch_scan={int(k): v["latency_ms"] for k, v in r.batch_scan.items()},
+        batch_throughput={int(k): v["throughput_qps"] for k, v in r.batch_scan.items()},
+        peak_memory_mb=r.peak_memory_mb,
     )
-    print("-" * 72)
-    print(f"{'bs':>6} | {'mean_ms':>8} | {'p50_ms':>8} | {'p90_ms':>8} | {'p99_ms':>8} | {'qps':>10}")
-    for bs, stats in r.batch_scan.items():
-        l = stats["latency_ms"]
-        print(
-            f"{bs:>6} | {l['mean_ms']:>8.2f} | {l['p50_ms']:>8.2f} | "
-            f"{l['p90_ms']:>8.2f} | {l['p99_ms']:>8.2f} | {stats['throughput_qps']:>10.1f}"
-        )
-    print(f"[peak memory] {r.peak_memory_mb:.1f} MB")
-    print("=" * 72)
 
 
 def main() -> None:
@@ -222,7 +216,7 @@ def main() -> None:
         Path(args.output).write_text(
             json.dumps(report_dict, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        print(f"[saved] {args.output}", file=sys.stderr)
+        tag_print("saved", args.output)
 
 
 if __name__ == "__main__":

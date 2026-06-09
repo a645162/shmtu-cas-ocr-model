@@ -12,6 +12,7 @@ import torch
 
 from cas_ocr_model.model import build_model_from_checkpoint
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
+from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.trainer.config import (
     DIGIT_LABELS,
     OPERATOR_LABELS,
@@ -41,9 +42,9 @@ class PyTorchBackend:
         self.device = torch.device(device)
         self.model = build_model_from_checkpoint(str(checkpoint), device=self.device)
         self.model.eval()
-        print(
-            f"[model-stats] "
-            f"{format_model_stats(collect_model_stats(self.model, image_size_h, image_size_w))}"
+        tag_print(
+            "model-stats",
+            f"{format_model_stats(collect_model_stats(self.model, image_size_h, image_size_w))}",
         )
 
     @torch.no_grad()
