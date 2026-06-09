@@ -26,7 +26,7 @@ accelerate launch \
     --num_processes "$SHMTU_NUM_GPUS" \
     --num_machines 1 \
     --dynamo_backend "$SHMTU_DYNAMO_BACKEND" \
-    --mixed_precision fp16 \
+    --mixed_precision "$SHMTU_MIXED_PRECISION" \
     -m cas_ocr_model.inference.multi_gpu_benchmark \
     --checkpoint "$CHECKPOINT" \
     --data-root "$SHMTU_DATASET_ROOT" \

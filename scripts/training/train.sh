@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# 启动 8 卡 DDP 训练 (accelerate launch + fp16 + 8gpu_ddp.yaml)
+# 启动 8 卡 DDP 训练 (accelerate launch + mixed precision + 8gpu_ddp.yaml)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -44,7 +44,7 @@ else
     RUN_DIR="$(bash "$SCRIPT_DIR/../common/run_path.sh" create)"
 fi
 
-echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS --num_machines 1 --dynamo_backend $SHMTU_DYNAMO_BACKEND"
+echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS --num_machines 1 --dynamo_backend $SHMTU_DYNAMO_BACKEND --mixed_precision $SHMTU_MIXED_PRECISION"
 echo "[train] config:  $CONFIG"
 echo "[train] dataset: $SHMTU_DATASET_ROOT"
 echo "[train] profile: $SHMTU_PROFILE_NAME"
@@ -69,7 +69,7 @@ accelerate launch \
     --num_processes "$SHMTU_NUM_GPUS" \
     --num_machines 1 \
     --dynamo_backend "$SHMTU_DYNAMO_BACKEND" \
-    --mixed_precision fp16 \
+    --mixed_precision "$SHMTU_MIXED_PRECISION" \
     -m cas_ocr_model.trainer.train \
     "${TRAIN_ARGS[@]}" \
     "$@"
