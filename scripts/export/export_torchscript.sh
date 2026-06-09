@@ -13,40 +13,26 @@ if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
 fi
 RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../run_path.sh" resolve)}"
 CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
-EXPORT_DIR="${EXPORT_DIR:-$RUN_DIR/export}"
+EXPORT_ROOT="${EXPORT_ROOT:-$RUN_DIR/export}"
+EXPORT_DIR="${EXPORT_DIR:-$EXPORT_ROOT/torchscript}"
 MODEL_NAME="${MODEL_NAME:-$(basename "${CHECKPOINT%.*}")}"
-OUTPUT="${OUTPUT:-$EXPORT_DIR/$MODEL_NAME.onnx}"
+EXPORT_PRECISION_TAG="${EXPORT_PRECISION_TAG:-fp16}"
+OUTPUT="${OUTPUT:-$EXPORT_DIR/$MODEL_NAME.$EXPORT_PRECISION_TAG.ts.pt}"
 IMAGE_SIZE_H="${IMAGE_SIZE_H:-64}"
 IMAGE_SIZE_W="${IMAGE_SIZE_W:-192}"
-OPSET="${OPSET:-17}"
-LEGACY_EXPORTER="${LEGACY_EXPORTER:-1}"
-DYNAMIC_BATCH="${DYNAMIC_BATCH:-1}"
 
 mkdir -p "$EXPORT_DIR"
 
 if [ ! -f "$CHECKPOINT" ]; then
-    echo "[export-onnx] checkpoint 不存在: $CHECKPOINT"
+    echo "[export-ts] checkpoint 不存在: $CHECKPOINT"
     exit 1
 fi
 
-ARGS=(
-    -m cas_ocr_model.trainer.export
-    --checkpoint "$CHECKPOINT"
-    --output "$OUTPUT"
-    --image-size-h "$IMAGE_SIZE_H"
-    --image-size-w "$IMAGE_SIZE_W"
-    --opset "$OPSET"
-)
-
-if [ "$DYNAMIC_BATCH" = "1" ]; then
-    ARGS+=(--dynamic-batch)
-fi
-
-if [ "$LEGACY_EXPORTER" = "1" ]; then
-    ARGS+=(--legacy-exporter)
-fi
-
 cd "$SHMTU_MODEL_ROOT"
-echo "[export-onnx] checkpoint = $CHECKPOINT"
-echo "[export-onnx] output     = $OUTPUT"
-"$SHMTU_PYTHON" "${ARGS[@]}"
+echo "[export-ts] checkpoint = $CHECKPOINT"
+echo "[export-ts] output     = $OUTPUT"
+"$SHMTU_PYTHON" -m cas_ocr_model.trainer.export_torchscript \
+    --checkpoint "$CHECKPOINT" \
+    --output "$OUTPUT" \
+    --image-size-h "$IMAGE_SIZE_H" \
+    --image-size-w "$IMAGE_SIZE_W"

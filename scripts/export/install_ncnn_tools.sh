@@ -54,14 +54,15 @@ asset_selector() {
     case "$OS_NAME:$ARCH_NAME" in
         Linux:x86_64)
             cat <<'EOF'
-ubuntu-2204\.zip$
-ubuntu-2404\.zip$
 ubuntu-2204-shared\.zip$
 ubuntu-2404-shared\.zip$
+ubuntu-2204\.zip$
+ubuntu-2404\.zip$
 EOF
             ;;
         Linux:aarch64|Linux:arm64)
             cat <<'EOF'
+(ubuntu|linux).*(aarch64|arm64).*-shared.*\.zip$
 (ubuntu|linux).*(aarch64|arm64).*\.zip$
 EOF
             ;;

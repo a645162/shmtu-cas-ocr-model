@@ -1,7 +1,8 @@
 """导出 ONNX, 供推理端 (C++ ncnn / Rust onnxruntime) 替换 v1 的"3 个独立模型".
 
 输入: best.pt (或任意 CaptchaTripleHeadCNN 权重)
-输出: model.onnx, 输入 (1, 1, H, W) float32 in [0, 1], 输出 3 个 logits.
+输出: model.onnx, 输入 (1, 1, H, W) in [0, 1], 输出 3 个 logits.
+支持导出 fp32 / fp16.
 
 用法:
     python -m cas_ocr_model.trainer.export \\
@@ -30,6 +31,20 @@ class ExportWrapper(nn.Module):
         return out["digit_left_logits"], out["operator_logits"], out["digit_right_logits"]
 
 
+def resolve_export_device(device_name: str, precision: str) -> torch.device:
+    if device_name == "auto":
+        if precision == "fp16":
+            if not torch.cuda.is_available():
+                raise SystemExit("导出 fp16 ONNX 需要 CUDA 环境, 或改为 --precision fp32")
+            return torch.device("cuda")
+        return torch.device("cpu")
+    if device_name == "cuda":
+        if not torch.cuda.is_available():
+            raise SystemExit("指定了 --device cuda, 但当前 CUDA 不可用")
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description="导出 captcha 模型 ONNX")
     p.add_argument("--checkpoint", type=str, required=True)
@@ -44,17 +59,26 @@ def main() -> None:
         action="store_true",
         help="使用旧版 TorchScript ONNX 导出器 (dynamo=False)，兼容性通常更稳",
     )
+    p.add_argument("--precision", choices=("fp16", "fp32"), default="fp32")
+    p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     args = p.parse_args()
 
-    model = build_model_from_checkpoint(args.checkpoint, device="cpu")
+    device = resolve_export_device(args.device, args.precision)
+    export_dtype = torch.float16 if args.precision == "fp16" else torch.float32
+
+    model = build_model_from_checkpoint(args.checkpoint, device=device)
     model.eval()
     print(
         f"[model-stats] "
         f"{format_model_stats(collect_model_stats(model, args.image_size_h, args.image_size_w))}"
     )
-    wrapper = ExportWrapper(model)
+    wrapper = ExportWrapper(model).to(device=device, dtype=export_dtype)
+    if export_dtype == torch.float16:
+        wrapper = wrapper.half()
+    else:
+        wrapper = wrapper.float()
 
-    dummy = torch.randn(1, 1, args.image_size_h, args.image_size_w, dtype=torch.float32)
+    dummy = torch.randn(1, 1, args.image_size_h, args.image_size_w, device=device, dtype=export_dtype)
     dynamic_axes = None
     if args.dynamic_batch:
         dynamic_axes = {
