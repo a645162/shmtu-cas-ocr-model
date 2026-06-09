@@ -4,7 +4,7 @@
 未来可加入更复杂的 (注意力 / Transformer / 多尺度融合) 而不影响训练入口.
 
 模块:
-    backbones                         - backbone 工厂 (ResNet-18/34/MobileNetV3-Small 1-通道)
+    backbones                         - backbone 工厂 (torchvision + timm, 统一 1-通道输入)
     heads                             - TriSlot Decoder 容器
     captcha_trislot_decoder_cnn       - 当前模型: backbone + TriSlot Decoder, 一次前向 3 logits
 
@@ -24,6 +24,7 @@ from .registry import (
     build_model_from_config,
     build_model_metadata,
     build_release_asset_stem,
+    find_release_checkpoint,
     get_model_spec,
     inspect_checkpoint,
     list_model_versions,
@@ -45,6 +46,7 @@ __all__ = [
     "build_model_from_config",
     "build_model_metadata",
     "build_release_asset_stem",
+    "find_release_checkpoint",
     "load_checkpoint",
     "predict_triple",
     "get_model_spec",

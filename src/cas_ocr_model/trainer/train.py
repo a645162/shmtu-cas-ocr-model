@@ -327,7 +327,21 @@ def describe_backbone_weights(backbone: str, pretrained: bool) -> str:
         "resnet18": "ResNet18_Weights.IMAGENET1K_V1",
         "resnet34": "ResNet34_Weights.IMAGENET1K_V1",
         "mobilenet_v3_small": "MobileNet_V3_Small_Weights.IMAGENET1K_V1",
+        "mobilenet_v3_large": "MobileNet_V3_Large_Weights.IMAGENET1K_V2",
+        "resnet50": "timm pretrained",
+        "r50": "timm pretrained",
+        "resnet101": "timm pretrained",
+        "r101": "timm pretrained",
+        "mobilenetv3_small_050": "timm pretrained",
+        "mobilenetv3_small_075": "timm pretrained",
+        "mobilenetv3_small_100": "timm pretrained",
+        "mobilenetv3_large_075": "timm pretrained",
+        "mobilenetv3_large_100": "timm pretrained",
+        "mobilenetv3_large_150d": "timm pretrained",
+        "mobilenetv3_rw": "timm pretrained",
     }
+    if backbone.startswith("timm/"):
+        return "timm pretrained"
     return mapping.get(backbone, "ImageNet pretrained")
 
 
@@ -1445,17 +1459,37 @@ def write_pytorch_release_manifest(
     checkpoint_path: Path,
     model_metadata: dict[str, Any],
 ) -> None:
-    manifest_path = output_dir / "release-model-assets.json"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    digest_path = checkpoint_path.parent / "SHA256SUMS.txt"
+    digest_path.write_text(
+        f"{sha256_file(checkpoint_path)}  {checkpoint_path.name}\n",
+        encoding="utf-8",
+    )
+    manifest_path = output_dir / "model-assets.json"
     manifest = {
         "schema_version": 1,
-        "model": model_metadata,
+        "models": [model_metadata],
         "artifacts": [
             {
-                "path": checkpoint_path.name,
+                **model_metadata,
                 "engine": "pytorch",
                 "precision": "fp32",
                 "format": "checkpoint",
-                "sha256": sha256_file(checkpoint_path),
+                "files": [
+                    {
+                        "path": checkpoint_path.relative_to(output_dir).as_posix(),
+                        "release_asset_name": checkpoint_path.name,
+                        "sha256": sha256_file(checkpoint_path),
+                    }
+                ],
+            }
+        ],
+        "digests": [
+            {
+                "engine": "pytorch",
+                "path": digest_path.relative_to(output_dir).as_posix(),
+                "release_asset_name": digest_path.name,
+                "sha256": sha256_file(digest_path),
             }
         ],
     }
@@ -1530,11 +1564,14 @@ def save_checkpoint(
 
     if is_best:
         best_path = output_dir / "best.pt"
-        release_path = output_dir / f"{model_metadata['asset_stem']}.pt"
+        release_root = output_dir / "release"
+        release_pytorch_dir = release_root / "pytorch"
+        release_pytorch_dir.mkdir(parents=True, exist_ok=True)
+        release_path = release_pytorch_dir / f"{model_metadata['asset_stem']}.pt"
         accelerator.save(state, str(best_path))
         accelerator.save(state, str(release_path))
         write_pytorch_release_manifest(
-            output_dir=output_dir,
+            output_dir=release_root,
             checkpoint_path=release_path,
             model_metadata=model_metadata,
         )

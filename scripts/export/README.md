@@ -18,8 +18,8 @@
 ```bash
 SHMTU_PROFILE_NAME=8gpu_ddp
 SHMTU_RUN_DIR=./runs/8gpu_ddp/20260608_153000
-CHECKPOINT=./runs/8gpu_ddp/20260608_153000/best.pt
-EXPORT_ROOT=./runs/8gpu_ddp/20260608_153000/export
+CHECKPOINT=./runs/8gpu_ddp/20260608_153000/release/pytorch/mobilenet_v3_small.trislot_decoder.v2_0.pt
+EXPORT_ROOT=./runs/8gpu_ddp/20260608_153000/release
 MODEL_NAME=mobilenet_v3_small.trislot_decoder.v2_0
 EXPORT_PRECISIONS="fp16 fp32"
 EXPORT_DEVICE=auto
@@ -36,7 +36,11 @@ RUN_NCNNOPTIMIZE=0
 默认目录结构:
 
 ```text
-runs/.../export/
+runs/.../release/
+  model-assets.json
+  pytorch/
+    SHA256SUMS.txt
+    mobilenet_v3_small.trislot_decoder.v2_0.pt
   onnx/
     SHA256SUMS.txt
     mobilenet_v3_small.trislot_decoder.v2_0.fp16.onnx
@@ -60,7 +64,7 @@ bash scripts/export/install_ncnn_tools.sh
 
 # 首次安装会优先选 shared 发行包；如果预编译包不含 pnnx，会自动下载 full-source 并编译 pnnx
 
-# 默认解析 runs/{profile}/latest
+# 默认解析 runs/{profile}/latest/release/pytorch/*.pt
 bash scripts/export/export_onnx.sh
 
 # 或显式指定某个 run
@@ -82,24 +86,24 @@ RUN_NCNNOPTIMIZE=1 \
 
 # 直接用 pnnx Python API
 python -m cas_ocr_model.export.export_ncnn \
-    --checkpoint ./runs/8gpu_ddp/20260608_153000/best.pt \
-    --output ./runs/8gpu_ddp/20260608_153000/export/ncnn/mobilenet_v3_small.trislot_decoder.v2_0.fp16.pt \
+    --checkpoint ./runs/8gpu_ddp/20260608_153000/release/pytorch/mobilenet_v3_small.trislot_decoder.v2_0.pt \
+    --output ./runs/8gpu_ddp/20260608_153000/release/ncnn/mobilenet_v3_small.trislot_decoder.v2_0.fp16.pt \
     --image-size-h 64 --image-size-w 192
 
 bash scripts/export/export_all.sh
 
 # 生成 GitHub Release 资产包与清单
 python -m cas_ocr_model.export.release_bundle \
-    --checkpoint ./runs/8gpu_ddp/20260608_153000/best.pt \
-    --output-root ./runs/8gpu_ddp/20260608_153000/export/release
+    --checkpoint ./runs/8gpu_ddp/20260608_153000/release/pytorch/mobilenet_v3_small.trislot_decoder.v2_0.pt \
+    --output-root ./runs/8gpu_ddp/20260608_153000/release_bundle
 
 # 校验 ONNX / ncnn 是否与 PyTorch 直接推理一致
 python scripts/export/verify_onnx_against_pytorch.py \
-    --checkpoint ./runs/8gpu_ddp/20260608_153000/best.pt \
-    --onnx ./runs/8gpu_ddp/20260608_153000/export/onnx/mobilenet_v3_small.trislot_decoder.v2_0.fp32.onnx
+    --checkpoint ./runs/8gpu_ddp/20260608_153000/release/pytorch/mobilenet_v3_small.trislot_decoder.v2_0.pt \
+    --onnx ./runs/8gpu_ddp/20260608_153000/release/onnx/mobilenet_v3_small.trislot_decoder.v2_0.fp32.onnx
 
 python scripts/export/verify_ncnn_against_pytorch.py \
-    --checkpoint ./runs/8gpu_ddp/20260608_153000/best.pt \
-    --param ./runs/8gpu_ddp/20260608_153000/export/ncnn/mobilenet_v3_small.trislot_decoder.v2_0.fp16.param \
-    --bin ./runs/8gpu_ddp/20260608_153000/export/ncnn/mobilenet_v3_small.trislot_decoder.v2_0.fp16.bin
+    --checkpoint ./runs/8gpu_ddp/20260608_153000/release/pytorch/mobilenet_v3_small.trislot_decoder.v2_0.pt \
+    --param ./runs/8gpu_ddp/20260608_153000/release/ncnn/mobilenet_v3_small.trislot_decoder.v2_0.fp16.param \
+    --bin ./runs/8gpu_ddp/20260608_153000/release/ncnn/mobilenet_v3_small.trislot_decoder.v2_0.fp16.bin
 ```

@@ -8,14 +8,14 @@
 | `operator_logits`    | 3   | 运算符 (`+ - *`, 自动兼容 `加/减/乘`) |
 | `digit_right_logits` | 10  | 第二个数字 (0-9) |
 
-与 `v1` 区别: 不再切 3 段、不再单独训练等号识别模型, 一个 ResNet-18 backbone 一次出 3 个 logits。
+与 `v1` 区别: 不再切 3 段、不再单独训练等号识别模型, 一个共享 backbone 一次出 3 个 logits。
 
 ## 目录
 
 ```
 trainer/
 ├── config.py     # 配置 dataclass + CLI + YAML/TOML 加载
-├── model.py      # CaptchaTriSlotDecoderCNN (ResNet-18/34 + TriSlot Decoder)
+├── model.py      # CaptchaTriSlotDecoderCNN (torchvision/timm backbone + TriSlot Decoder)
 ├── data.py       # CaptchaPairDataset: 扫描 jpg+json, 灰度+二值化
 ├── losses.py     # 3-head 联合 CE + 准确率
 ├── train.py      # accelerate 训练入口 (DDP + fp16 + 线性 warmup + AdamW)
@@ -99,7 +99,7 @@ accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor -
 * **Early stop**: `train.early_stop_patience=0` 关闭; `-1` 自动取总 epoch 的 20%; 正整数表示连续多少个验证 epoch 不提升后停止
 * **梯度裁剪** L2=1.0
 * **AdamW** + 1e-4 weight decay
-* **ImageNet 预训练 backbone** (`resnet18` 或 `resnet34`)
+* **ImageNet 预训练 backbone**: 例如 `resnet18` / `resnet34` / `r50` / `resnet101` / `mobilenetv3_large_100` / `timm/<model_name>`
 * **标签平滑** 0.05
 * **主进程 rich 进度条**: 交互式终端显示 step/loss/acc/lr/吞吐, 非 TTY 自动回退文本日志
 * **DDP 全局聚合日志**: train/val/test 指标按所有 rank 汇总, 可直接用于 console 和 wandb

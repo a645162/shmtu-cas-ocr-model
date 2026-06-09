@@ -46,8 +46,9 @@ if [ -z "${SHMTU_PROFILE_NAME:-}" ]; then
     export SHMTU_PROFILE_DIR="$SHMTU_RUNS_ROOT/$SHMTU_PROFILE_NAME"
 fi
 RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../common/run_path.sh" resolve)}"
-CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
-EXPORT_ROOT="${EXPORT_ROOT:-$RUN_DIR/export}"
+RELEASE_ROOT="${RELEASE_ROOT:-$RUN_DIR/release}"
+CHECKPOINT="${CHECKPOINT:-$("$SHMTU_PYTHON" -m cas_ocr_model.model.cli release-checkpoint --release-root "$RELEASE_ROOT" 2>/dev/null || true)}"
+EXPORT_ROOT="${EXPORT_ROOT:-$RELEASE_ROOT}"
 EXPORT_DIR="${EXPORT_DIR:-$EXPORT_ROOT/ncnn}"
 EXPORT_NCNN_MODE="${EXPORT_NCNN_MODE:-python}"
 IMAGE_SIZE_H="${IMAGE_SIZE_H:-64}"
@@ -61,6 +62,7 @@ mkdir -p "$EXPORT_DIR"
 
 if [ ! -f "$CHECKPOINT" ]; then
     echo "[export-ncnn] checkpoint 不存在: $CHECKPOINT"
+    echo "[export-ncnn] 默认从 release 目录读取 pytorch 权重: $RELEASE_ROOT/pytorch"
     exit 1
 fi
 

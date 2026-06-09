@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from .registry import inspect_checkpoint, list_model_versions
+from .registry import find_release_checkpoint, inspect_checkpoint, list_model_versions
 
 
 def main() -> None:
@@ -21,9 +21,18 @@ def main() -> None:
         choices=["version", "family", "display_name", "backbone", "asset_stem", "checkpoint"],
     )
 
+    release_parser = subparsers.add_parser("release-checkpoint", help="解析 release 目录中的 PyTorch checkpoint")
+    release_parser.add_argument("--release-root", required=True)
+
     args = parser.parse_args()
     if args.command == "list-versions":
         print("\n".join(list_model_versions()))
+        return
+    if args.command == "release-checkpoint":
+        try:
+            print(find_release_checkpoint(args.release_root))
+        except FileNotFoundError as exc:
+            raise SystemExit(str(exc)) from exc
         return
 
     metadata = inspect_checkpoint(args.checkpoint)

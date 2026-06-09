@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
 import torch
 import torch.nn as nn
 
+from .backbones import is_supported_backbone, list_available_backbones
 from .versions import MODEL_FAMILY as DEFAULT_MODEL_FAMILY
 from .versions import MODEL_VERSION as DEFAULT_MODEL_VERSION
 from .versions import build_v2_0_model
@@ -30,7 +32,7 @@ _MODEL_SPECS: dict[str, ModelSpec] = {
         family=DEFAULT_MODEL_FAMILY,
         display_name="CAS OCR TriSlot Decoder",
         builder=build_v2_0_model,
-        supported_backbones=("mobilenet_v3_small", "resnet18", "resnet34"),
+        supported_backbones=tuple(list_available_backbones()),
     ),
 }
 
@@ -86,7 +88,7 @@ def build_model_metadata(model_cfg: Mapping[str, Any] | None) -> dict[str, Any]:
     cfg = extract_model_config(model_cfg)
     spec = get_model_spec(cfg.get("version"))
     backbone = str(cfg.get("backbone", "resnet18"))
-    if backbone not in spec.supported_backbones:
+    if not is_supported_backbone(backbone):
         raise ValueError(
             f"model version {spec.version} does not support backbone={backbone}; "
             f"available={list(spec.supported_backbones)}"
@@ -147,3 +149,32 @@ def inspect_checkpoint(checkpoint: str | Path) -> dict[str, Any]:
     metadata = extract_checkpoint_metadata(raw)
     metadata["checkpoint"] = str(Path(checkpoint).expanduser().resolve())
     return metadata
+
+
+def find_release_checkpoint(release_root: str | Path) -> Path:
+    root = Path(release_root).expanduser().resolve()
+    manifest_path = root / "model-assets.json"
+    if manifest_path.is_file():
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for artifact in raw.get("artifacts", []):
+            if artifact.get("engine") != "pytorch":
+                continue
+            if artifact.get("precision") != "fp32":
+                continue
+            files = artifact.get("files", [])
+            if not files:
+                continue
+            candidate = root / files[0]["path"]
+            if candidate.is_file():
+                return candidate.resolve()
+
+    pytorch_dir = root / "pytorch"
+    if pytorch_dir.is_dir():
+        candidates = [
+            path for path in sorted(pytorch_dir.glob("*.pt"))
+            if path.name not in {"best.pt", "last.pt"}
+        ]
+        if candidates:
+            return candidates[0].resolve()
+
+    raise FileNotFoundError(f"unable to find release pytorch checkpoint under {root}")

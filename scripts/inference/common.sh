@@ -13,9 +13,11 @@ shmtu_inference_init() {
     fi
 
     RUN_DIR="${RUN_DIR:-$(bash "$SCRIPT_DIR/../common/run_path.sh" resolve)}"
-    EXPORT_ROOT="${EXPORT_ROOT:-$RUN_DIR/export}"
-    CHECKPOINT="${CHECKPOINT:-$RUN_DIR/best.pt}"
-    MODEL_NAME="${MODEL_NAME:-$("$SHMTU_PYTHON" -m cas_ocr_model.model.cli checkpoint-metadata --checkpoint "$CHECKPOINT" --field asset_stem 2>/dev/null || basename "${CHECKPOINT%.*}")}"
+    RELEASE_ROOT="${RELEASE_ROOT:-$RUN_DIR/release}"
+    EXPORT_ROOT="${EXPORT_ROOT:-$RELEASE_ROOT}"
+    RELEASE_CHECKPOINT="$("$SHMTU_PYTHON" -m cas_ocr_model.model.cli release-checkpoint --release-root "$RELEASE_ROOT" 2>/dev/null || true)"
+    CHECKPOINT="${CHECKPOINT:-${RELEASE_CHECKPOINT:-$RUN_DIR/best.pt}}"
+    MODEL_NAME="${MODEL_NAME:-$("$SHMTU_PYTHON" -m cas_ocr_model.model.cli checkpoint-metadata --checkpoint "${RELEASE_CHECKPOINT:-$CHECKPOINT}" --field asset_stem 2>/dev/null || basename "${CHECKPOINT%.*}")}"
     ONNX_PATH="${ONNX_PATH:-$EXPORT_ROOT/onnx/$MODEL_NAME.fp32.onnx}"
     NCNN_PARAM="${NCNN_PARAM:-$EXPORT_ROOT/ncnn/$MODEL_NAME.fp32.param}"
     NCNN_BIN="${NCNN_BIN:-$EXPORT_ROOT/ncnn/$MODEL_NAME.fp32.bin}"

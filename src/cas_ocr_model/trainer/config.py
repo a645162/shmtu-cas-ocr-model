@@ -124,7 +124,7 @@ class ModelConfig:
     """模型版本. 当前默认 2.0."""
 
     backbone: str = "resnet18"
-    """backbone 名称 (当前支持 resnet18 / resnet34 / mobilenet_v3_small)."""
+    """backbone 名称, 支持内置别名或 ``timm/<model_name>``."""
 
     pretrained: bool = True
     """是否加载 ImageNet 预训练权重. 验证码数据少, 强烈建议 True."""

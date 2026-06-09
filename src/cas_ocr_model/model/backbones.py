@@ -1,12 +1,20 @@
-"""Backbone 工厂: 把 torchvision backbone 改造成"接收 1-通道灰度图".
+"""Backbone 工厂: 把 torchvision / timm backbone 改造成接收 1-通道灰度图.
 
-当前实现: ResNet-18 / ResNet-34 / MobileNetV3-Small.
-输出保留空间特征图, 便于后续按宽度做槽位解码.
+当前默认实现保留原有 torchvision:
+    * resnet18 / resnet34 / mobilenet_v3_small / mobilenet_v3_large
+
+新增:
+    * resnet50 / r50
+    * resnet101 / r101
+    * mobilenetv3_small_050 / _075 / _100
+    * mobilenetv3_large_075 / _100 / _150d
+    * mobilenetv3_rw
+    * 任意 ``timm/<model_name>`` 形式的 timm features_only backbone
 
 设计原则:
     * backbone 输出固定维度 (B, feat_dim, H', W') 的空间特征图
-    * 第一层 conv 改成 in_channels=1 (验证码是灰度)
-    * 预训练 RGB conv1 权重按通道均值迁移到灰度 conv1
+    * 第一层 conv 改成 in_channels=1, 或直接让 timm 以 in_chans=1 构造
+    * 旧 backbone 名称保持不变, 避免影响已有 checkpoint
 """
 from __future__ import annotations
 
@@ -14,7 +22,11 @@ from typing import Callable, Dict, Tuple
 
 import torch
 import torch.nn as nn
+import timm
 from torchvision import models
+
+TIMM_DYNAMIC_PREFIX = "timm/"
+TIMM_DYNAMIC_HINT = "timm/<model_name>"
 
 
 # ----------------------------------------------------------------------------
@@ -40,18 +52,20 @@ def _register(name: str):
 # ----------------------------------------------------------------------------
 
 
-def _register_standard_grad_layout(param: nn.Parameter) -> None:
-    """规整 grad stride, 避免 DDP 对 size-1 通道卷积反复告警.
+class _SelectLastFeature(nn.Module):
+    """把 timm features_only 输出的多尺度特征压成最后一层空间特征图."""
 
-    compile + DDP 下, 1 通道 conv 的梯度有时会以等价但不同 stride
-    (如 [9, 1, 3, 1]) 返回, 触发 reducer 的性能警告。
-    这里把 grad 显式 clone 到标准 contiguous_format。
-    """
+    def __init__(self, backbone: nn.Module) -> None:
+        super().__init__()
+        self.backbone = backbone
 
-    def _hook(grad: torch.Tensor) -> torch.Tensor:
-        return grad.clone(memory_format=torch.contiguous_format)
-
-    param.register_hook(_hook)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        feats = self.backbone(x)
+        if isinstance(feats, (list, tuple)):
+            if not feats:
+                raise RuntimeError("timm backbone returned empty feature list")
+            return feats[-1]
+        return feats
 
 
 def _to_grayscale_conv(conv: nn.Conv2d) -> nn.Conv2d:
@@ -65,10 +79,6 @@ def _to_grayscale_conv(conv: nn.Conv2d) -> nn.Conv2d:
     )
     with torch.no_grad():
         gray.weight.copy_(conv.weight.mean(dim=1, keepdim=True))
-    
-    # Fix compiler + DDP grad stride warning for 1-channel conv.
-    # _register_standard_grad_layout(gray.weight)
-    
     return gray
 
 
@@ -79,13 +89,35 @@ def _spatialize_resnet(net: nn.Module) -> Tuple[nn.Module, int]:
     return features, feat_dim
 
 
-def _spatialize_mobilenet_v3_small(net: nn.Module) -> Tuple[nn.Module, int]:
+def _spatialize_mobilenet_v3(net: nn.Module) -> Tuple[nn.Module, int]:
     first_conv = net.features[0][0]
     if not isinstance(first_conv, nn.Conv2d):
-        raise TypeError("unexpected MobileNetV3-Small stem layout")
+        raise TypeError("unexpected MobileNetV3 stem layout")
     net.features[0][0] = _to_grayscale_conv(first_conv)
     feat_dim = net.classifier[0].in_features
     return net.features, feat_dim
+
+
+def _build_timm_spatial_backbone(model_name: str, pretrained: bool) -> Tuple[nn.Module, int]:
+    backbone = timm.create_model(
+        model_name,
+        pretrained=pretrained,
+        in_chans=1,
+        features_only=True,
+    )
+    if not hasattr(backbone, "feature_info"):
+        raise TypeError(f"timm backbone {model_name} does not expose feature_info")
+    channels = backbone.feature_info.channels()
+    if not channels:
+        raise RuntimeError(f"timm backbone {model_name} returned empty feature_info")
+    feat_dim = int(channels[-1])
+    return _SelectLastFeature(backbone), feat_dim
+
+
+def _register_timm_alias(alias: str, model_name: str) -> None:
+    @_register(alias)
+    def _factory(pretrained: bool, *, _model_name: str = model_name) -> Tuple[nn.Module, int]:
+        return _build_timm_spatial_backbone(_model_name, pretrained)
 
 
 @_register("resnet18")
@@ -109,19 +141,54 @@ def _mobilenet_v3_small(pretrained: bool) -> Tuple[nn.Module, int]:
     net = models.mobilenet_v3_small(
         weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1 if pretrained else None
     )
-    return _spatialize_mobilenet_v3_small(net)
+    return _spatialize_mobilenet_v3(net)
 
 
-# 未来可加:
-#   @_register("resnet50")
-#   @_register("convnext_tiny")
-#   @_register("efficientnet_b0")
-#   @_register("vit_small_patch16")
+@_register("mobilenet_v3_large")
+def _mobilenet_v3_large(pretrained: bool) -> Tuple[nn.Module, int]:
+    net = models.mobilenet_v3_large(
+        weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V2 if pretrained else None
+    )
+    return _spatialize_mobilenet_v3(net)
+
+
+for _alias, _model_name in (
+    ("resnet50", "resnet50"),
+    ("r50", "resnet50"),
+    ("resnet101", "resnet101"),
+    ("r101", "resnet101"),
+    ("mobilenetv3_small_050", "mobilenetv3_small_050"),
+    ("mobilenetv3_small_075", "mobilenetv3_small_075"),
+    ("mobilenetv3_small_100", "mobilenetv3_small_100"),
+    ("mobilenetv3_large_075", "mobilenetv3_large_075"),
+    ("mobilenetv3_large_100", "mobilenetv3_large_100"),
+    ("mobilenetv3_large_150d", "mobilenetv3_large_150d"),
+    ("mobilenetv3_rw", "mobilenetv3_rw"),
+):
+    _register_timm_alias(_alias, _model_name)
 
 
 # ----------------------------------------------------------------------------
 # 公共 API
 # ----------------------------------------------------------------------------
+
+
+def is_supported_backbone(name: str) -> bool:
+    if name in _BACKBONE_REGISTRY:
+        return True
+    if not name.startswith(TIMM_DYNAMIC_PREFIX):
+        return False
+    model_name = name[len(TIMM_DYNAMIC_PREFIX):].strip()
+    if not model_name:
+        return False
+    return model_name in timm.list_models()
+
+
+def resolve_backbone_name(name: str) -> str:
+    raw = str(name).strip()
+    if not raw:
+        raise ValueError("backbone name must not be empty")
+    return raw
 
 
 def build_resnet_backbone(
@@ -131,19 +198,33 @@ def build_resnet_backbone(
     """按名称构造 backbone.
 
     Args:
-        name: ``"resnet18"`` / ``"resnet34"`` / ``"mobilenet_v3_small"``
-            (见 list_available_backbones)
+        name:
+            * registry 内置名称, 如 ``resnet18`` / ``resnet34`` / ``r50`` /
+              ``resnet101`` / ``mobilenetv3_large_100``
+            * 或动态 timm 名称: ``timm/<model_name>``
         pretrained: 是否加载 ImageNet 预训练权重
 
     Returns:
         (model, feat_dim). model 输出空间特征图, 直接接位置感知 head 即可.
     """
-    if name not in _BACKBONE_REGISTRY:
-        raise ValueError(
-            f"unknown backbone: {name}; available={list_available_backbones()}"
-        )
-    return _BACKBONE_REGISTRY[name](pretrained)
+    name = resolve_backbone_name(name)
+    if name in _BACKBONE_REGISTRY:
+        return _BACKBONE_REGISTRY[name](pretrained)
+    if name.startswith(TIMM_DYNAMIC_PREFIX):
+        model_name = name[len(TIMM_DYNAMIC_PREFIX):].strip()
+        if not model_name:
+            raise ValueError(f"invalid dynamic backbone: {name}")
+        if model_name not in timm.list_models():
+            raise ValueError(
+                f"unknown timm backbone: {model_name}; "
+                f"hint=use one of timm.list_models(), e.g. {TIMM_DYNAMIC_HINT}"
+            )
+        return _build_timm_spatial_backbone(model_name, pretrained)
+    raise ValueError(
+        f"unknown backbone: {name}; available={list_available_backbones()}"
+    )
 
 
 def list_available_backbones() -> list[str]:
-    return sorted(_BACKBONE_REGISTRY.keys())
+    names = sorted(_BACKBONE_REGISTRY.keys())
+    return names + [TIMM_DYNAMIC_HINT]
