@@ -165,6 +165,21 @@ def is_wandb_installed() -> bool:
     return True
 
 
+def is_accelerate_tracker_available(name: str) -> bool:
+    """按 accelerate 自身的可用性判定 tracker, 避免与 log_with 的行为不一致."""
+    try:
+        from accelerate.tracking import filter_trackers
+    except Exception:
+        if name == "wandb":
+            return is_wandb_installed()
+        return False
+
+    try:
+        return bool(filter_trackers([name]))
+    except Exception:
+        return False
+
+
 def resolve_report_to(report_to: str | None) -> tuple[str | list[str] | None, str]:
     raw = (report_to or "").strip()
     lowered = raw.lower()
@@ -173,7 +188,7 @@ def resolve_report_to(report_to: str | None) -> tuple[str | list[str] | None, st
     if lowered in {"", "auto"}:
         if env_disabled:
             return None, f"disabled-by-env:{env_reason}"
-        if is_wandb_installed():
+        if is_accelerate_tracker_available("wandb"):
             return "wandb", "auto-wandb"
         return None, "auto-no-wandb"
 
@@ -191,12 +206,14 @@ def ensure_tracker_dependencies(report_to: str | list[str] | None) -> None:
         return
     trackers = [report_to] if isinstance(report_to, str) else list(report_to)
     if "wandb" in trackers:
-        try:
-            import wandb  # noqa: F401
-        except ImportError as e:
+        if not is_wandb_installed():
             raise RuntimeError(
                 "启用 wandb 需要先安装依赖: pip install -e .[wandb] 或 pip install wandb"
-            ) from e
+            )
+        if not is_accelerate_tracker_available("wandb"):
+            raise RuntimeError(
+                "当前环境中的 wandb 未被 accelerate 识别; 请确认 wandb 安装在启动训练的同一 Python 环境中"
+            )
 
 
 def resolve_default_wandb_run_name(output_dir: str) -> str:
