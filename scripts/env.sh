@@ -22,6 +22,7 @@
 #   SHMTU_DISABLE_WANDB     设为 1/true/yes/on 时禁用训练自动接入 wandb
 #   SHMTU_DYNAMO_BACKEND    accelerate dynamo backend, 默认 inductor; 可设为 no 回退
 #   SHMTU_MIXED_PRECISION   accelerate mixed precision, 默认 bf16; 可设为 fp16 / no
+#   SHMTU_MAIN_PROCESS_PORT accelerate / DDP 主进程端口; 不设时优先用 torch_ddp_port 自动选择
 
 # Mirrors
 # export HF_ENDPOINT=https://hf-mirror.com
@@ -75,6 +76,7 @@ export SHMTU_PYTHON="${SHMTU_PYTHON:-python3}"
 # inductor or no
 export SHMTU_DYNAMO_BACKEND="${SHMTU_DYNAMO_BACKEND:-no}"
 export SHMTU_MIXED_PRECISION="${SHMTU_MIXED_PRECISION:-bf16}"
+export SHMTU_MAIN_PROCESS_PORT="${SHMTU_MAIN_PROCESS_PORT:-}"
 
 # 仓库根 (lib shmtu-cas-python 路径)
 export SHMTU_REPO_ROOT="${SHMTU_REPO_ROOT:-$(cd "$SHMTU_MODEL_ROOT/../.." && pwd)}"
@@ -96,4 +98,5 @@ if [ "${SHMTU_ENV_SILENT:-0}" != "1" ]; then
     echo "[env] SHMTU_NUM_GPUS       = $SHMTU_NUM_GPUS"
     echo "[env] SHMTU_DYNAMO_BACKEND = $SHMTU_DYNAMO_BACKEND"
     echo "[env] SHMTU_MIXED_PRECISION = $SHMTU_MIXED_PRECISION"
+    echo "[env] SHMTU_MAIN_PROCESS_PORT = ${SHMTU_MAIN_PROCESS_PORT:-<auto>}"
 fi

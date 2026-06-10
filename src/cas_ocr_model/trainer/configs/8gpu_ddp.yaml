@@ -77,7 +77,9 @@ data:
 model:
   version: "2.0"                        # 当前模型版本列表: 2.0
   # 可选: mobilenet_v3_small / mobilenet_v3_large / mobilenetv3_large_100 / r50 / resnet101 / mobilenetv4_conv_small / mobilenetv4_hybrid_medium / repvgg_a0 / repvgg_b1 / timm/<model_name>
+  # backbone: mobilenet_v3_small
   backbone: mobilenetv4_conv_small
+  # backbone: repvgg_a0
   pretrained: true               # true=加载 ImageNet 预训练; false=随机初始化
   dropout: 0.2                   # head dropout, 可尝试 0.0 ~ 0.3
   slot_hidden_dim: 256           # head 隐层维度, 可尝试 128 / 256

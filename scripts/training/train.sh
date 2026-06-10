@@ -44,11 +44,15 @@ else
     RUN_DIR="$(bash "$SCRIPT_DIR/../common/run_path.sh" create)"
 fi
 
-echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS --num_machines 1 --dynamo_backend $SHMTU_DYNAMO_BACKEND --mixed_precision $SHMTU_MIXED_PRECISION"
+MAIN_PROCESS_PORT="$(bash "$SCRIPT_DIR/../common/ddp_port.sh")"
+export MASTER_PORT="$MAIN_PROCESS_PORT"
+
+echo "[train] accelerate launch --num_processes $SHMTU_NUM_GPUS --num_machines 1 --main_process_port $MAIN_PROCESS_PORT --dynamo_backend $SHMTU_DYNAMO_BACKEND --mixed_precision $SHMTU_MIXED_PRECISION"
 echo "[train] config:  $CONFIG"
 echo "[train] dataset: $SHMTU_DATASET_ROOT"
 echo "[train] profile: $SHMTU_PROFILE_NAME"
 echo "[train] output:  $RUN_DIR"
+echo "[train] port:    $MAIN_PROCESS_PORT"
 if [ -n "$RESUME_FROM" ]; then
     echo "[train] resume:  $RESUME_FROM"
 fi
@@ -68,6 +72,7 @@ fi
 accelerate launch \
     --num_processes "$SHMTU_NUM_GPUS" \
     --num_machines 1 \
+    --main_process_port "$MAIN_PROCESS_PORT" \
     --dynamo_backend "$SHMTU_DYNAMO_BACKEND" \
     --mixed_precision "$SHMTU_MIXED_PRECISION" \
     -m cas_ocr_model.trainer.train \

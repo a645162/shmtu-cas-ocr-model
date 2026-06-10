@@ -55,7 +55,7 @@ dataset/
 
 ```bash
 # accelerate launch (推荐)
-accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision bf16 \
+accelerate launch --num_processes 8 --num_machines 1 --main_process_port "$(torch_ddp_port)" --dynamo_backend inductor --mixed_precision bf16 \
     -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml
 
@@ -64,7 +64,7 @@ torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml
 
 # 或 TOML 配置
-accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision bf16 \
+accelerate launch --num_processes 8 --num_machines 1 --main_process_port "$(torch_ddp_port)" --dynamo_backend inductor --mixed_precision bf16 \
     -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/mobile_small.toml
 
@@ -81,7 +81,7 @@ torchrun --nproc_per_node=8 -m cas_ocr_model.trainer.train \
     --resume-from ./runs/exp1/last.pt
 
 # 接入 wandb
-accelerate launch --num_processes 8 --num_machines 1 --dynamo_backend inductor --mixed_precision bf16 \
+accelerate launch --num_processes 8 --num_machines 1 --main_process_port "$(torch_ddp_port)" --dynamo_backend inductor --mixed_precision bf16 \
     -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml \
     --report-to wandb \

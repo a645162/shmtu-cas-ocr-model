@@ -48,6 +48,7 @@ python -m cas_ocr_model.trainer.train \
 ```bash
 # 使用 accelerate launch
 accelerate launch --num_processes 8 --num_machines 1 \
+    --main_process_port "$(torch_ddp_port)" \
     --dynamo_backend inductor --mixed_precision bf16 \
     -m cas_ocr_model.trainer.train \
     --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml
