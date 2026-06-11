@@ -1,91 +1,98 @@
-# 上海海事大学 统一认证平台 验证码识别模型训练(PyTorch)
+# SHMTU CAS OCR Model
 
-## 技术栈
+上海海事大学统一认证平台验证码识别模型训练与推理项目。
 
-- Python
-- PyTorch
-- OpenCV
-- ResNet
+## 模型版本
 
-## 操作步骤
+### V2 — TriSlot Decoder（当前版本）
 
-- 图像转换为灰度图
-- 图像二值化
-- 对图像7，3分最后一部分作为“等于”与“=”的区分标准
-- 使用ResNet-18对最后的符号进行区分，分为3部分(数字，运算符，数字)
-- 对1,3部分使用ResNet-18进行**数字**识别
-- 对2部分使用ResNet-18进行**运算符**识别
+单 CNN 端到端识别：共享 backbone + 槽位注意力解码器，一次前向输出数字/运算符/数字三个分类头。
 
-## 本系列项目
+- **架构**：MobileNetV3-Small + TriSlot Decoder
+- **输入**：`(B, 1, 64, 192)` 灰度图
+- **输出**：`digit_left` (10类) + `operator` (3类: `+`, `-`, `*`) + `digit_right` (10类)
+- **无需图像切割**，整图输入
 
-### 客户端
+### V1 — 三模型分离（历史版本）
 
-* Go Wails版
-  [https://github.com/a645162/SHMTU-Terminal-Wails](https://github.com/a645162/SHMTU-Terminal-Wails)
-* Rust Tauri版(画个饼，或许以后会做吧~)
+图像切割 → 独立 ResNet 分类，代码完整保留在 `src/cas_ocr_model/v1/` 中。
 
-### 服务器部署模型
+## 快速开始
 
-验证码OCR识别系列项目今后将只会维护推理服务器(shmtu-cas-ocr-server)这一个项目。
+```bash
+# 克隆项目
+git clone https://github.com/a645162/shmtu-cas-ocr-model.git
+cd shmtu-cas-ocr-model
 
-[https://github.com/a645162/shmtu-cas-ocr-server](https://github.com/a645162/shmtu-cas-ocr-server)
+# 安装依赖 (Python >= 3.10)
+pip install -e .            # 核心依赖 (训练 + PyTorch 推理)
+pip install -e ".[onnx]"   # ONNX 导出/推理
+pip install -e ".[ncnn]"   # NCNN 导出/推理
+pip install -e ".[wandb]"  # wandb 实验追踪
+```
 
-注：这个项目为王老师的研究生课程《机器视觉》的课程设计项目，仅用作学习用途！！！
+详细使用说明请参阅 [文档站点](https://a645162.github.io/shmtu-cas-ocr-model/)。
 
-### 统一认证登录流程(数字平台+微信平台)
+## 训练
 
-* Kotlin版(方便移植Android)
-  [https://github.com/a645162/shmtu-cas-kotlin](https://github.com/a645162/shmtu-cas-kotlin)
-* Go版(为Wails桌面客户端做准备)
-  [https://github.com/a645162/shmtu-cas-go](https://github.com/a645162/shmtu-cas-go)
-* Rust版(未来想做Tauri桌面客户端可能会移植)
-  ps.功能其实和Golang版本没啥区别，甚至可能实现地更费劲，Golang的移植已经让我比较抓狂了，虽然Rust我也是会的，但是或许不会做。。。
+```bash
+# 单卡训练
+python -m cas_ocr_model.trainer.train \
+    --data-root ./dataset \
+    --output-dir ./runs/exp1 \
+    --epochs 200
 
-注：这个项目为王老师的研究生课程《机器视觉》的课程设计项目，仅用作学习用途！！！
+# 8 卡 DDP 训练（推荐）
+accelerate launch --num_processes 8 --mixed_precision bf16 \
+    -m cas_ocr_model.trainer.train \
+    --config src/cas_ocr_model/trainer/configs/8gpu_ddp.yaml
+```
 
-### 模型训练
+## 推理
 
-**神经网络图像分类模型训练**
+```bash
+# PyTorch
+python -m cas_ocr_model.inference --checkpoint ./runs/exp1/best.pt --image ./test.jpg
 
-使用PyTorch以及经典网络ResNet
+# ONNX
+python -m cas_ocr_model.inference --backend onnx --onnx-path ./model.onnx --image ./test.jpg
 
-[https://github.com/a645162/shmtu-cas-ocr-model](https://github.com/a645162/shmtu-cas-ocr-model)
+# NCNN
+python -m cas_ocr_model.inference --backend ncnn --ncnn-param ./model.param --ncnn-bin ./model.bin --image ./test.jpg
+```
 
-**人工标注的数据集(2选1下载)**
+## Release 资产
 
-* Hugging Face
-  https://huggingface.co/datasets/a645162/shmtu_cas_validate_code
-* Gitee AI(国内较快)
-  https://ai.gitee.com/datasets/a645162/shmtu_cas_validate_code
+### V2 (v2.0.2)
 
-训练代码中包含爬虫代码，以及自动测试识别结果代码。
-您可以对其修改，对测试通过的图片进行标注，这样可以获得准确的标注。
+| 引擎 | 精度 | 文件 | 大小 |
+|---|---|---|---|
+| PyTorch | fp32 | `mobilenet_v3_small.trislot_decoder.v2_0.pt` | 17.2 MB |
+| ONNX | fp16 | `*.fp16.onnx` | 2.9 MB |
+| ONNX | fp32 | `*.fp32.onnx` | 5.7 MB |
+| NCNN | fp16 | `*.fp16.param` + `*.fp16.bin` | 13 KB + 2.8 MB |
+| NCNN | fp32 | `*.fp32.param` + `*.fp32.bin` | 13 KB + 5.6 MB |
 
-注：这个项目为王老师的研究生课程《机器视觉》的课程设计项目，仅用作学习用途！！！
+Release 中附带 `model-assets.json`（元数据 + SHA256）与 `SHA256SUMS.txt`。
 
-### 模型本地部署
+### V1
 
-* Windows客户端(包括VC Win32 GUI以及C# WPF)
-  [https://github.com/a645162/shmtu-cas-ocr-demo-windows](https://github.com/a645162/shmtu-cas-ocr-demo-windows)
-* Qt客户端(支持Windows/macOS/Linux)
-  [https://github.com/a645162/shmtu-cas-ocr-demo-qt](https://github.com/a645162/shmtu-cas-ocr-demo-qt)
-* Android客户端
-  [https://github.com/a645162/shmtu-cas-demo-android](https://github.com/a645162/shmtu-cas-demo-android)
+| Release | 内容 |
+|---|---|
+| `v1.0` | 3 × PyTorch checkpoint (ResNet-34/18) |
+| `v1.0-ONNX` | 3 × ONNX 导出 |
 
-注：这3个项目为王老师的研究生课程《机器视觉》的课程设计项目，仅用作学习用途！！！
+## 数据集
 
-### 原型测试
+- **Hugging Face**: https://huggingface.co/datasets/a645162/shmtu_cas_validate_code
+- **Gitee AI (国内较快)**: https://ai.gitee.com/datasets/a645162/shmtu_cas_validate_code
 
-Python+Selenium4自动化测试数字海大平台登录流程
+## 相关项目
 
-[https://github.com/a645162/Digital-SHMTU-Tools](https://github.com/a645162/Digital-SHMTU-Tools)
-
-注：本项目为付老师的研究生课程《Python程序设计与开发》的课程设计项目，仅用作学习用途！！！
+- [shmtu-cas-ocr-server](https://github.com/a645162/shmtu-cas-ocr-server) — C++ OCR 服务 (Drogon + ncnn)
+- [shmtu-terminal-tauri](https://github.com/a645162/shmtu-terminal-tauri) — Tauri v2 桌面应用
+- [shmtu-cas-kotlin](https://github.com/a645162/shmtu-cas-kotlin) — 统一认证登录库
 
 ## 免责声明
 
-本(系列)项目仅供学习交流使用，不得用于商业用途，如有侵权请联系作者删除。
-
-本(系列)项目为个人开发，与上海海事大学无关，仅供学习参考，请勿用于非法用途。
-
-本(系列)项目为孔昊旻同学的**课程设计**项目，仅用作学习用途！！！
+本项目仅供学习交流使用，不得用于商业用途。本项目为个人开发，与上海海事大学无关，仅供学习参考，请勿用于非法用途。

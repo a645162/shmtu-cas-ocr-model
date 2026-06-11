@@ -9,8 +9,11 @@
 git clone https://github.com/a645162/shmtu-cas-ocr-model.git
 cd shmtu-cas-ocr-model
 
-# 安装依赖 (Python >= 3.9)
-pip install -e .
+# 安装依赖 (Python >= 3.10)
+pip install -e .            # 核心依赖 (训练 + PyTorch 推理)
+pip install -e ".[onnx]"   # ONNX 导出/推理
+pip install -e ".[ncnn]"   # NCNN 导出/推理
+pip install -e ".[wandb]"  # wandb 实验追踪
 ```
 
 ## 数据集
@@ -120,7 +123,7 @@ python -m cas_ocr_model.inference --backend ncnn --ncnn-param ./runs/exp1/model.
 ## 接入 wandb
 
 ```bash
-pip install -e .[wandb]
+pip install -e ".[wandb]"
 
 accelerate launch --num_processes 8 --mixed_precision bf16 \
     -m cas_ocr_model.trainer.train \

@@ -87,3 +87,24 @@ result = predictor.predict(image_path="test.jpg")
 - `deprecated/pre/` — 图像预处理
 
 这些代码仅作历史参考，不建议用于新项目。
+
+## V1 Release 资产
+
+V1 模型权重发布在 GitHub Release 上，包含原始 PyTorch checkpoint 和 ONNX 导出：
+
+| Release | 文件 | 大小 |
+|---|---|---|
+| `v1.0` | `resnet34_digit_latest.pth` | 81.4 MB |
+| `v1.0` | `resnet18_operator_latest.pth` | 42.8 MB |
+| `v1.0` | `resnet18_equal_symbol_latest.pth` | 42.7 MB |
+| `v1.0-ONNX` | `resnet34_digit_latest.onnx` | 81.1 MB |
+| `v1.0-ONNX` | `resnet18_operator_latest.onnx` | 42.7 MB |
+| `v1.0-ONNX` | `resnet18_equal_symbol_latest.onnx` | 42.6 MB |
+
+下载地址：
+
+- PyTorch 权重：`https://github.com/a645162/shmtu-cas-ocr-model/releases/tag/v1.0`
+- ONNX 权重：`https://github.com/a645162/shmtu-cas-ocr-model/releases/tag/v1.0-ONNX`
+- SHA256 校验：各 release 中附带 `SHA256SUMS.txt`
+
+V1 采用硬编码文件列表 + `SHA256SUMS.txt` 校验，不支持 `model-assets.json` 智能下载（该功能仅 V2 支持）。

@@ -105,5 +105,7 @@ loss:
 | Checkpoint | `{backbone}.trislot_decoder.v{version}.pt` | `mobilenet_v3_small.trislot_decoder.v2_0.pt` |
 | ONNX (fp32) | `{backbone}.trislot_decoder.v{version}.fp32.onnx` | `mobilenet_v3_small.trislot_decoder.v2_0.fp32.onnx` |
 | ONNX (fp16) | `{backbone}.trislot_decoder.v{version}.fp16.onnx` | `mobilenet_v3_small.trislot_decoder.v2_0.fp16.onnx` |
-| NCNN param | `{backbone}.trislot_decoder.v{version}.fp16.param` | `mobilenet_v3_small.trislot_decoder.v2_0.fp16.param` |
-| NCNN bin | `{backbone}.trislot_decoder.v{version}.fp16.bin` | `mobilenet_v3_small.trislot_decoder.v2_0.fp16.bin` |
+| NCNN param (fp16) | `{backbone}.trislot_decoder.v{version}.fp16.param` | `mobilenet_v3_small.trislot_decoder.v2_0.fp16.param` |
+| NCNN bin (fp16) | `{backbone}.trislot_decoder.v{version}.fp16.bin` | `mobilenet_v3_small.trislot_decoder.v2_0.fp16.bin` |
+| NCNN param (fp32) | `{backbone}.trislot_decoder.v{version}.fp32.param` | `mobilenet_v3_small.trislot_decoder.v2_0.fp32.param` |
+| NCNN bin (fp32) | `{backbone}.trislot_decoder.v{version}.fp32.bin` | `mobilenet_v3_small.trislot_decoder.v2_0.fp32.bin` |
