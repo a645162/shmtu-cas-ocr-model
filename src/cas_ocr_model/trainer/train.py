@@ -70,6 +70,7 @@ from cas_ocr_model.common.checkpoint_pip import (
     write_pip_list_json,
 )
 from cas_ocr_model.common.release_manifest import build_release_manifest
+from cas_ocr_model.common.experiment_info import collect_experiment_metadata
 
 try:
     from rich.progress import (
@@ -1029,6 +1030,9 @@ def main() -> None:
         )
         console.tag_print("config", f"{cfg_to_dict(cfg)}")
 
+    # 记录训练开始时间 (UTC seconds)
+    training_start_utc = int(time.time())
+
     # 3) 数据 (按 manifest 读取 train/val/test)
     train_ds = CaptchaPairDataset(
         data_root=cfg.data.data_root,
@@ -1731,6 +1735,12 @@ def main() -> None:
                     ckpt["model_metadata"]["metrics"] = {}
                 ckpt["model_metadata"]["metrics"]["test_acc_expression"] = final_test_metrics["acc_expression"]
                 ckpt["model_metadata"]["metrics"]["test_loss"] = final_test_metrics["loss"]
+                # 收集实验级元信息并注入 checkpoint
+                training_end_utc = int(time.time())
+                exp_meta = collect_experiment_metadata(cfg, accelerator, training_start_utc, training_end_utc, best_epoch)
+                ckpt.setdefault("model_metadata", {})
+                ckpt["model_metadata"].setdefault("training", {})
+                ckpt["model_metadata"]["training"].update(exp_meta)
                 
                 accelerator.save(ckpt, str(best_path))
                 
@@ -1913,6 +1923,31 @@ def save_checkpoint(
         pip_list = None
         pip_list_metadata = None
         _console.tag_print("WARN", f"capture pip list failed: {exc}")
+
+    # 使用独立模块收集运行时与数据集摘要
+    try:
+        from cas_ocr_model.common.run_metadata import collect_run_metadata
+        from cas_ocr_model.datasets.manifest_info import collect_manifest_summary
+
+        run_meta = collect_run_metadata(unwrapped)
+        if run_meta.get("model_size_m") is not None:
+            model_metadata["model_size_m"] = run_meta.get("model_size_m")
+        model_metadata.setdefault("environment", {})
+        model_metadata["environment"].update(run_meta.get("environment", {}))
+        # prefer run_meta pip if capture_pip_list_snapshot failed earlier
+        if pip_list is None and run_meta.get("pip_list") is not None:
+            pip_list = run_meta.get("pip_list")
+            pip_list_metadata = run_meta.get("pip_list_metadata")
+
+        # dataset manifest summary: created_at, sha256, stats, label_set
+        try:
+            manifest_summary = collect_manifest_summary(cfg.data.data_root)
+            model_metadata.setdefault("dataset", {})
+            model_metadata["dataset"].update(manifest_summary)
+        except Exception:
+            pass
+    except Exception as _exc:
+        _console.tag_print("WARN", f"collect run/manifest metadata failed: {_exc}")
     state = {
         "epoch": epoch,
         "model_state_dict": unwrapped.state_dict(),
