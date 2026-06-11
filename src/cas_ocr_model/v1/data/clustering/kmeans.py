@@ -33,7 +33,7 @@ def _copy_images_to_clusters(
 ) -> None:
     for label in set(labels):
         os.makedirs(os.path.join(output_directory, f"cluster_{label}"), exist_ok=True)
-    for filename, label in zip(os.listdir(input_directory), labels):
+    for filename, label in zip(os.listdir(input_directory), labels, strict=False):
         if filename.endswith((".jpg", ".png")):
             src = os.path.join(input_directory, filename)
             dst = os.path.join(output_directory, f"cluster_{label}", filename)

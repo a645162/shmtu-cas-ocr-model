@@ -159,7 +159,7 @@ def evaluate_local_shard(
     *,
     save_dir: Path | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    digit2idx = {s: i for i, s in enumerate(DIGIT_LABELS)}
+    {s: i for i, s in enumerate(DIGIT_LABELS)}
     op2idx = {s: i for i, s in enumerate(OPERATOR_LABELS)}
 
     results = inferencer.predict_batch([p for p, _ in samples]) if samples else []
@@ -176,7 +176,7 @@ def evaluate_local_shard(
     bin_correct_sums = np.zeros(n_bins, dtype=np.float64)
     records: list[dict[str, Any]] = []
 
-    for (jpg, (d1, op, d2, ans)), pred in zip(samples, results):
+    for (jpg, (d1, op, d2, ans)), pred in zip(samples, results, strict=False):
         n += 1
         pred_dl = int(pred.digit_left)
         pred_op = pred.operator
@@ -273,7 +273,7 @@ def compute_ece_from_bins(
     if total == 0:
         return 0.0
     ece = 0.0
-    for count, conf_sum, correct_sum in zip(bin_counts, bin_conf_sums, bin_correct_sums):
+    for count, conf_sum, correct_sum in zip(bin_counts, bin_conf_sums, bin_correct_sums, strict=False):
         if count <= 0:
             continue
         avg_conf = float(conf_sum / count)

@@ -467,7 +467,7 @@ def main() -> None:
 
     manifest_artifacts: list[dict[str, Any]] = []
     release_files: list[Path] = []
-    for checkpoint, metadata in resolved_models:
+    for _, metadata in resolved_models:
         asset_stem = metadata["asset_stem"]
 
         if "pytorch" in engines:

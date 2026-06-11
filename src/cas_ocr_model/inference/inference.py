@@ -143,7 +143,7 @@ class CaptchaInferencer:
         if not paths:
             return []
         results = self.predict_batch(list(paths))
-        return [(p.name, r) for p, r in zip(paths, results)]
+        return [(p.name, r) for p, r in zip(paths, results, strict=False)]
 
     # ---- 内部 ----
 

@@ -39,10 +39,10 @@ def worker_main(
         if progress_q is None:
             print(prefix, flush=True)
             return
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
             progress_q.put_nowait({"level": level, "msg": prefix, "ts": time.time()})
-        except Exception:  # noqa: BLE001
-            pass
 
     saved = rejected = errors = 0
 

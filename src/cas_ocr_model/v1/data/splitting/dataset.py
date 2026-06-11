@@ -46,7 +46,7 @@ def split_dataset(
         split_counts[-1] += num_files - sum(split_counts)
 
         start_index = 0
-        for split_name, count in zip(splits, split_counts):
+        for split_name, count in zip(splits, split_counts, strict=False):
             split_dir = os.path.join(save_dir_base, split_name, class_name)
             os.makedirs(split_dir, exist_ok=True)
             end_index = start_index + count

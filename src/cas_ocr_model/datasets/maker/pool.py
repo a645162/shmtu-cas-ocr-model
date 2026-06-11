@@ -146,10 +146,7 @@ def spawn_workers(args: argparse.Namespace) -> None:
                     # ETA / 速率: 本次新采 / 已用时间; 至少 2 张样本 + 1s 才计算
                     new_this_run = counter.value - start_idx
                     elapsed = max(1e-6, time.monotonic() - boot_time)
-                    if new_this_run >= 2 and elapsed >= 1.0:
-                        rate = new_this_run / elapsed
-                    else:
-                        rate = 0.0
+                    rate = new_this_run / elapsed if new_this_run >= 2 and elapsed >= 1.0 else 0.0
                     eta_str_value = format_eta(
                         (max(0, args.count - new_this_run) / rate)
                         if rate > 0

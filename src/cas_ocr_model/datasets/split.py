@@ -70,9 +70,8 @@ def split_dataset(
             max_files = None
         elif max_files < 0:
             raise ValueError(f"max_files 必须为非负整数, got {max_files}")
-    if max_files is not None:
-        if max_files < len(files):
-            files = files[:max_files]
+    if max_files is not None and max_files < len(files):
+        files = files[:max_files]
 
     # 顺序切片
     n = len(files)

@@ -33,10 +33,10 @@ async def verify_one(
     def _log(level: str, msg: str) -> None:
         if log_q is None:
             return
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
             log_q.put_nowait({"level": level, "msg": f"{log_prefix} {msg}", "ts": time.time()})
-        except Exception:  # noqa: BLE001
-            pass
 
     try:
         probe = await auth.probe_login()
@@ -118,10 +118,10 @@ async def collect_one(
     def _log(level: str, msg: str) -> None:
         if log_q is None:
             return
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
             log_q.put_nowait({"level": level, "msg": f"{log_prefix} {msg}", "ts": time.time()})
-        except Exception:  # noqa: BLE001
-            pass
 
     verification = await verify_one(backend, auth, log_prefix=log_prefix, log_q=log_q)
     if verification.status == "error":
@@ -140,7 +140,7 @@ async def collect_one(
     ) as tmp_img:
         tmp_img.write(verification.image_bytes)
         tmp_img_path = Path(tmp_img.name)
-    tmp_img_path.replace(jpg_path)
+    tmp_img_path.replace(jpg_path)  # noqa: ASYNC240
 
     payload = {
         "id": idx,
@@ -158,7 +158,7 @@ async def collect_one(
     ) as tmp_json:
         json.dump(payload, tmp_json, ensure_ascii=False, indent=2)
         tmp_json_path = Path(tmp_json.name)
-    tmp_json_path.replace(json_path)
+    tmp_json_path.replace(json_path)  # noqa: ASYNC240
 
     _log(
         "info",

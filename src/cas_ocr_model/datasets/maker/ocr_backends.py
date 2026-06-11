@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -59,10 +60,8 @@ class TcpBackend:
         self._client = CaptchaOcr(host=host, port=port)
 
     def warmup(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self._client.ocr_auto_retry(b"", max_retries=1)
-        except Exception:
-            pass
 
     async def recognize(self, image_bytes: bytes) -> OcrHit:
         expr = await asyncio.to_thread(self._client.ocr_auto_retry, image_bytes, 2)

@@ -602,7 +602,7 @@ def build_results_csv_rows(history: list[dict[str, Any]]) -> tuple[list[str], li
     for record in sorted(history, key=lambda item: int(item.get("epoch", 0))):
         row = flatten_epoch_record_for_csv(record)
         rows.append(row)
-        for key in row.keys():
+        for key in row:
             if key not in fieldnames:
                 fieldnames.append(key)
     return fieldnames, rows

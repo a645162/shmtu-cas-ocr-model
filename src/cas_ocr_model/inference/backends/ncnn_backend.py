@@ -86,7 +86,7 @@ class NcnnBackend:
                     f"ncnn extractor.input 失败: input_name={self.input_name}, ret={ret}"
                 )
 
-            for head_name, blob_name in zip(HEAD_NAMES, self.output_names):
+            for head_name, blob_name in zip(HEAD_NAMES, self.output_names, strict=False):
                 ret, out = extractor.extract(blob_name)
                 if ret != 0:
                     raise RuntimeError(

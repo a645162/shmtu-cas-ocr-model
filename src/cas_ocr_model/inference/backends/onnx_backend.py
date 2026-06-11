@@ -63,7 +63,7 @@ class OnnxBackend:
             )
         return {
             head_name: output_name
-            for head_name, output_name in zip(HEAD_NAMES, output_names)
+            for head_name, output_name in zip(HEAD_NAMES, output_names, strict=False)
         }
 
     def infer(self, image: torch.Tensor) -> dict[str, np.ndarray]:
@@ -78,7 +78,7 @@ class OnnxBackend:
         )
         return {
             head_name: np.asarray(output, dtype=np.float32)
-            for head_name, output in zip(HEAD_NAMES, outputs)
+            for head_name, output in zip(HEAD_NAMES, outputs, strict=False)
         }
 
     @property

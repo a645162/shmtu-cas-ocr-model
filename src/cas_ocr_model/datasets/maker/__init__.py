@@ -47,6 +47,7 @@ def __getattr__(name: str):
 __all__ = [
     "build_arg_parser",
     "build_eval_arg_parser",
+    "format_eta",
     "random_probe_account",
     "scan_existing_max_index",
     "USER_AGENT",

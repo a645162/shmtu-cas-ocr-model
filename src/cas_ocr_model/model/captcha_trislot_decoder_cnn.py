@@ -84,7 +84,7 @@ def predict_triple(
     dr = out["digit_right_logits"].argmax(dim=-1).cpu().tolist()
 
     results: list[dict[str, str]] = []
-    for a, b, c in zip(dl, op, dr):
+    for a, b, c in zip(dl, op, dr, strict=False):
         results.append(
             {
                 "digit_left": digit_labels[a],

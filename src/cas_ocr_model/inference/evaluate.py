@@ -57,9 +57,12 @@ def _parse_gt_expression(expr: str) -> tuple[int, str, int, int | None] | None:
 
 def _safe_eval(d1: int, op: str, d2: int) -> int | None:
     try:
-        if op == "+": return d1 + d2
-        if op == "-": return d1 - d2
-        if op == "*": return d1 * d2
+        if op == "+":
+            return d1 + d2
+        if op == "-":
+            return d1 - d2
+        if op == "*":
+            return d1 * d2
     except Exception:
         return None
     return None
@@ -108,7 +111,7 @@ def evaluate(
     if operator_labels is None:
         from cas_ocr_model.trainer.config import OPERATOR_LABELS as operator_labels  # type: ignore
 
-    digit2idx = {s: i for i, s in enumerate(digit_labels)}
+    {s: i for i, s in enumerate(digit_labels)}
     op2idx = {s: i for i, s in enumerate(operator_labels)}
 
     paths = sorted(Path(dataset_dir).glob(pattern))
@@ -148,7 +151,7 @@ def evaluate(
 
     per_sample: list[dict] = []
 
-    for (jpg, (d1, op, d2, ans)), r in zip(samples, results):
+    for (jpg, (d1, op, d2, ans)), r in zip(samples, results, strict=False):
         try:
             pred_dl = int(r.digit_left)
             pred_op = r.operator

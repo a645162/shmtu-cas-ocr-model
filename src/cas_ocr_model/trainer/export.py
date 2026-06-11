@@ -94,10 +94,7 @@ def main() -> None:
         f"{format_model_stats(collect_model_stats(model, args.image_size_h, args.image_size_w))}",
     )
     wrapper = ExportWrapper(model).to(device=device, dtype=export_dtype)
-    if export_dtype == torch.float16:
-        wrapper = wrapper.half()
-    else:
-        wrapper = wrapper.float()
+    wrapper = wrapper.half() if export_dtype == torch.float16 else wrapper.float()
 
     dummy = torch.randn(1, 1, args.image_size_h, args.image_size_w, device=device, dtype=export_dtype)
     dynamic_axes = None
