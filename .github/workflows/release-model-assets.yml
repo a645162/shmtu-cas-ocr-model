@@ -51,7 +51,7 @@ jobs:
           find release_checkpoints -maxdepth 1 -type f | sort
 
       - name: Upload Checkpoints Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-checkpoints
           path: release_checkpoints/*
@@ -68,20 +68,20 @@ jobs:
             artifact_name: release-export-ncnn
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[export,ncnn]"
+          python -m pip install -e ".[onnx,ncnn]"
 
       - name: Download Checkpoints Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-checkpoints
           path: release_checkpoints
@@ -107,7 +107,7 @@ jobs:
           cp -R "release_export/${{ matrix.engine }}" artifact_stage/
 
       - name: Upload Release Engine Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: artifact_stage/*
@@ -119,32 +119,32 @@ jobs:
       - export-release-engine
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[export,ncnn]"
+          python -m pip install -e ".[onnx,ncnn]"
 
       - name: Download Checkpoints Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-checkpoints
           path: release_checkpoints
 
       - name: Download ONNX Release Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-export-onnx
           path: release_export
 
       - name: Download NCNN Release Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-export-ncnn
           path: release_export

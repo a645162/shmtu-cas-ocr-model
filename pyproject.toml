@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-export = [
+onnx = [
     "onnx>=1.18",
     "onnxscript>=0.5",
     "onnxconverter-common>=1.14",
