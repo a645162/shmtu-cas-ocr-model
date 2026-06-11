@@ -62,6 +62,8 @@ jobs:
     strategy:
       matrix:
         include:
+          - engine: pytorch
+            artifact_name: release-export-pytorch
           - engine: onnx
             artifact_name: release-export-onnx
           - engine: ncnn
@@ -97,14 +99,17 @@ jobs:
             --legacy-exporter \
             --dynamic-batch \
             --onnx-device cpu \
-            --skip-manifest \
-            --skip-digest
+            --write-meta
 
       - name: Stage Engine Artifact
         run: |
           set -euo pipefail
           mkdir -p artifact_stage
           cp -R "release_export/${{ matrix.engine }}" artifact_stage/
+          # 同时复制 per-engine 元数据 JSON, 供 finalize 阶段合并 manifest
+          if [ -f "release_export/_meta_${{ matrix.engine }}.json" ]; then
+            cp "release_export/_meta_${{ matrix.engine }}.json" artifact_stage/
+          fi
 
       - name: Upload Release Engine Artifact
         uses: actions/upload-artifact@v7
@@ -121,21 +126,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[onnx,ncnn]"
-
-      - name: Download Checkpoints Artifact
+      - name: Download PyTorch Release Artifact
         uses: actions/download-artifact@v8
         with:
-          name: release-checkpoints
-          path: release_checkpoints
+          name: release-export-pytorch
+          path: release_export
 
       - name: Download ONNX Release Artifact
         uses: actions/download-artifact@v8
@@ -149,35 +144,12 @@ jobs:
           name: release-export-ncnn
           path: release_export
 
-      - name: Finalize Release Manifest And Pip List JSON
+      - name: Merge Release Manifest And Digest
         run: |
           set -euo pipefail
-          python -m cas_ocr_model.export.release_bundle \
-            --checkpoint-dir release_checkpoints \
+          python3 scripts/export/merge_release_manifest.py \
             --output-root release_export \
-            --engines pytorch \
-            --precisions "fp16 fp32" \
-            --legacy-exporter \
-            --dynamic-batch \
-            --onnx-device cpu \
-            --skip-manifest \
-            --skip-digest
-
-          python -m cas_ocr_model.export.release_bundle \
-            --checkpoint-dir release_checkpoints \
-            --output-root release_export \
-            --engines "pytorch onnx ncnn" \
-            --precisions "fp16 fp32" \
-            --legacy-exporter \
-            --dynamic-batch \
-            --onnx-device cpu \
-            --finalize-only \
-            --skip-digest
-
-      - name: Generate Final Release Digest
-        run: |
-          set -euo pipefail
-          EXPORT_ROOT=release_export bash scripts/export/generate_release_digest.sh
+            --upload-list release_upload_list.tsv
 
       - name: Inspect Final Release Export
         run: |
@@ -190,10 +162,6 @@ jobs:
           RELEASE_TAG: ${{ needs.prepare-release.outputs.release-tag }}
         run: |
           set -euo pipefail
-          python -m cas_ocr_model.export.release_upload_list \
-            --output-root release_export \
-            --output release_upload_list.tsv
-
           while IFS=$'\t' read -r file release_name; do
             gh release upload "$RELEASE_TAG" "$file#$release_name" --clobber
           done < release_upload_list.tsv

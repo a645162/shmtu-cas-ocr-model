@@ -48,6 +48,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--finalize-only", action="store_true", help="不导出, 仅基于现有资产生成 manifest/digest")
     p.add_argument("--skip-manifest", action="store_true", help="导出后不生成 model-assets.json")
     p.add_argument("--skip-digest", action="store_true", help="导出后不生成 SHA256SUMS.txt")
+    p.add_argument("--write-meta", action="store_true", help="导出后写出 per-engine 元数据 JSON (_meta_<engine>.json), 供 finalize 阶段合并")
     return p.parse_args()
 
 
@@ -462,7 +463,7 @@ def main() -> None:
     for directory in cleanup_targets:
         cleanup_release_directory(directory)
 
-    if args.skip_manifest and args.skip_digest:
+    if args.skip_manifest and args.skip_digest and not args.write_meta:
         return
 
     manifest_artifacts: list[dict[str, Any]] = []
@@ -497,6 +498,25 @@ def main() -> None:
                         **relativize_artifact_paths(output_root, artifact),
                     }
                 )
+
+    # --write-meta: 写出 per-engine 元数据片段, 供 finalize 阶段无依赖合并
+    if args.write_meta:
+        model_entries = [metadata for _, metadata in resolved_models]
+        for engine in engines:
+            engine_artifacts = [a for a in manifest_artifacts if a.get("engine") == engine]
+            engine_files = []
+            for a in engine_artifacts:
+                engine_files.extend(Path(f["path"]) for f in a.get("files", []))
+            meta = {
+                "model_entries": model_entries,
+                "artifacts": engine_artifacts,
+                "engines": [engine],
+                "precisions": precisions,
+            }
+            meta_path = output_root / f"_meta_{engine}.json"
+            meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            tag_print("release-export", f"meta -> {meta_path}")
+        return
 
     manifest_digests: list[dict[str, Any]] = []
     if not args.skip_digest:
