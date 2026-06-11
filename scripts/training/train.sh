@@ -41,7 +41,26 @@ if [ -n "$RESUME_FROM" ]; then
     fi
     RUN_DIR="$(dirname "$RESUME_FROM")"
 else
-    RUN_DIR="$(bash "$SCRIPT_DIR/../common/run_path.sh" create)"
+    # 检查 $@ 中是否已通过 --output-dir 指定了 run 目录
+    # 如果有，复用该目录而不是创建新的（避免 latest 被覆盖）
+    _prev=""
+    _output_dir_from_args=""
+    for arg in "$@"; do
+        if [ "$_prev" = "--output-dir" ]; then
+            _output_dir_from_args="$arg"
+            break
+        fi
+        if [[ "$arg" == --output-dir=* ]]; then
+            _output_dir_from_args="${arg#--output-dir=}"
+            break
+        fi
+        _prev="$arg"
+    done
+    if [ -n "$_output_dir_from_args" ]; then
+        RUN_DIR="$_output_dir_from_args"
+    else
+        RUN_DIR="$(bash "$SCRIPT_DIR/../common/run_path.sh" create)"
+    fi
 fi
 
 MAIN_PROCESS_PORT="$(bash "$SCRIPT_DIR/../common/ddp_port.sh")"

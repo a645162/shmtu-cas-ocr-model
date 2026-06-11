@@ -41,15 +41,15 @@ data:
   adaptive_block_size: 25                                         # adaptive 模式邻域大小, 必须奇数
   adaptive_c: 15                                                  # adaptive 模式阈值偏移
   train_ratio: 0.9                                                # 无 manifest 时使用
-  num_workers: 4                                                  # 每进程 DataLoader worker 数
+  num_workers: 8                                                  # 每进程 DataLoader worker 数
   pin_memory: true                                                # CUDA 推荐 true
   augmentation:
     enabled: true                                                 # 训练集增强总开关
 
     translate_enabled: true                                       # 平移增强开关
-    translate_prob: 0.7                                           # 小幅平移概率
-    translate_x_px: 6                                             # 水平最大位移, 不裁切
-    translate_y_px: 3                                             # 垂直最大位移, 不裁切
+    translate_prob: 0.6                                           # 小幅平移概率
+    translate_x_px: 16                                            # 水平最大位移, 不裁切
+    translate_y_px: 8                                             # 垂直最大位移, 不裁切
 
     affine_enabled: true                                          # 轻微仿射增强开关
     affine_prob: 0.4                                              # 轻微旋转/shear/缩放概率
@@ -103,7 +103,7 @@ train:
   mixed_precision: bf16            # 默认与 SHMTU_MIXED_PRECISION 保持一致
   gradient_accumulation_steps: 1   # 梯度累积步数
   report_to: auto                  # auto=已安装 wandb 且未被配置/环境禁用时自动启用
-  tracker_project_name: cas-ocr-train # accelerate tracker project
+  tracker_project_name: shmtu-cas-ocr # accelerate tracker project
   # wandb_run_name: mobilenet-ddp-exp1
   # wandb_entity: your-team
   # wandb_tags: [ddp, captcha, mobilenet]
@@ -136,11 +136,11 @@ loss:
 
   enable_slot_right_boundary: true    # 第三个槽位是否限制在 '=' 左侧
   weight_slot_right_boundary: 0.01    # 温和启用, 影响稍小
-  slot_right_boundary_max: 0.68       # 第三个槽位中心允许的最右边界
+  slot_right_boundary_max: 0.80       # 第三个槽位中心允许的最右边界
 
   enable_slot_attention_variance: true   # 是否限制 attention 过散
   weight_slot_attention_variance: 0.005  # 温和启用, 影响稍小
   slot_attention_max_variance: 0.035     # 单个槽位 attention 方差上界
 
   enable_operator_class_balance: true    # 是否给 operator head 加类别权重
-  operator_class_weights: [1.0, 1.05, 1.1] # 轻微类别平衡, 顺序与 OPERATOR_LABELS 一致
+  operator_class_weights: [1.0, 1.15, 1.1] # 轻微类别平衡, 顺序与 OPERATOR_LABELS 一致
