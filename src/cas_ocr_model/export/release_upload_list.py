@@ -7,6 +7,7 @@ from pathlib import Path
 from cas_ocr_model.common.release_manifest import iter_manifest_artifacts
 
 ALLOWED_SUFFIXES = {".pt", ".pth", ".onnx", ".param", ".bin", ".txt", ".json"}
+DIGEST_FILENAME = "SHA256SUMS.txt"
 
 
 def parse_args() -> argparse.Namespace:
@@ -25,12 +26,8 @@ def resolve_release_path(output_root: Path, rel_path: Path) -> Path:
     return abs_path
 
 
-def main() -> None:
-    args = parse_args()
-    output_root = Path(args.output_root).expanduser().resolve()
+def collect_release_uploads(output_root: Path) -> list[tuple[Path, str]]:
     manifest_path = output_root / "model-assets.json"
-    output_path = Path(args.output).expanduser().resolve()
-
     raw = json.loads(manifest_path.read_text(encoding="utf-8"))
     uploads: list[tuple[Path, str]] = [(manifest_path, manifest_path.name)]
 
@@ -49,12 +46,29 @@ def main() -> None:
             raise SystemExit(f"unexpected release digest suffix: {abs_path.name}")
         uploads.append((abs_path, digest.get("release_asset_name", abs_path.name)))
 
+    digest_path = output_root / DIGEST_FILENAME
+    if digest_path.is_file():
+        uploads.append((digest_path, digest_path.name))
+
+    deduped_uploads: list[tuple[Path, str]] = []
     seen: set[Path] = set()
-    lines: list[str] = []
     for abs_path, release_name in uploads:
         if abs_path in seen:
             continue
         seen.add(abs_path)
+        deduped_uploads.append((abs_path, release_name))
+
+    return deduped_uploads
+
+
+def main() -> None:
+    args = parse_args()
+    output_root = Path(args.output_root).expanduser().resolve()
+    output_path = Path(args.output).expanduser().resolve()
+    uploads = collect_release_uploads(output_root)
+
+    lines: list[str] = []
+    for abs_path, release_name in uploads:
         if not abs_path.is_file():
             raise SystemExit(f"release asset missing: {abs_path}")
         lines.append(f"{abs_path}\t{release_name}")

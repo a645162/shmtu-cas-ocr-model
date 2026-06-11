@@ -149,7 +149,7 @@ jobs:
           name: release-export-ncnn
           path: release_export
 
-      - name: Finalize Release Manifest, Digest, And Pip List JSON
+      - name: Finalize Release Manifest And Pip List JSON
         run: |
           set -euo pipefail
           python -m cas_ocr_model.export.release_bundle \
@@ -171,8 +171,17 @@ jobs:
             --legacy-exporter \
             --dynamic-batch \
             --onnx-device cpu \
-            --finalize-only
+            --finalize-only \
+            --skip-digest
 
+      - name: Generate Final Release Digest
+        run: |
+          set -euo pipefail
+          EXPORT_ROOT=release_export bash scripts/export/generate_release_digest.sh
+
+      - name: Inspect Final Release Export
+        run: |
+          set -euo pipefail
           find release_export -maxdepth 2 -type f | sort
 
       - name: Upload Release Assets
