@@ -1052,9 +1052,27 @@ def main() -> None:
         adaptive_c=cfg.data.adaptive_c,
         split="val",
     )
-    has_test = (Path(cfg.data.data_root) / "manifest.json").is_file() and bool(
-        DatasetManifest.load(cfg.data.data_root).splits.get("test")
-    )
+    
+    manifest_created_at = None
+    manifest_digest = None
+    manifest_path = Path(cfg.data.data_root) / "manifest.json"
+    has_test = False
+    if manifest_path.is_file():
+        try:
+            _m = DatasetManifest.load(cfg.data.data_root)
+            has_test = bool(_m.splits.get("test"))
+            manifest_created_at = _m.created_at
+            
+            # 内联计算 SHA256 digest
+            import hashlib
+            d = hashlib.sha256()
+            with manifest_path.open("rb") as mf:
+                for chunk in iter(lambda: mf.read(1024 * 1024), b""):
+                    d.update(chunk)
+            manifest_digest = d.hexdigest()
+        except Exception:
+            pass
+
     test_ds = None
     if has_test:
         try:
@@ -1459,6 +1477,13 @@ def main() -> None:
                     stop_reason=stop_reason,
                     metrics_history=metrics_history,
                     save_latest=not epoch_had_nonfinite_gradient,
+                    dataset_info={
+                        "train_samples": len(train_ds),
+                        "val_samples": len(val_ds),
+                        "test_samples": len(test_ds) if test_ds else 0,
+                        "split_created_at": manifest_created_at,
+                        "split_manifest_sha256": manifest_digest,
+                    },
                 )
             break
 
@@ -1643,6 +1668,13 @@ def main() -> None:
                 stop_reason=stop_reason,
                 metrics_history=metrics_history,
                 save_latest=not epoch_had_nonfinite_gradient,
+                dataset_info={
+                    "train_samples": len(train_ds),
+                    "val_samples": len(val_ds),
+                    "test_samples": len(test_ds) if test_ds else 0,
+                    "split_created_at": manifest_created_at,
+                    "split_manifest_sha256": manifest_digest,
+                },
             )
 
         if nonfinite_stop_triggered:
@@ -1657,6 +1689,61 @@ def main() -> None:
 
     console.success("training complete")
     accelerator.wait_for_everyone()
+
+    # ----------------------------------------------------
+    # 训练结束: 显式加载 best.pt, 并在 test 集上测试, 
+    # 并将 test_metrics 写入 best.pt 与最终发布的 json (model-assets.json)
+    # ----------------------------------------------------
+    if test_loader is not None:
+        best_path = Path(cfg.train.output_dir) / "best.pt"
+        if best_path.exists():
+            console.rule("Evaluating Best Model on Test Set", style="bold blue")
+            # Load best.pt state (all ranks wait and load from CPU, then apply to model)
+            ckpt = torch.load(best_path, map_location="cpu")
+            model_state = ckpt.get("model_state_dict")
+            if model_state is not None:
+                accelerator.unwrap_model(model).load_state_dict(model_state)
+            
+            # Evaluate using best model
+            final_test_metrics = evaluate(
+                accelerator,
+                model,
+                test_loader,
+                loss_fn,
+                stage="final test (best.pt)",
+                enable_rich_progress=enable_rich_progress,
+            )
+            console.tag_print(
+                "test(best)",
+                f"loss={final_test_metrics['loss']:.4f} "
+                f"acc_dl={final_test_metrics['acc_digit_left']:.4f} "
+                f"acc_op={final_test_metrics['acc_operator']:.4f} "
+                f"acc_dr={final_test_metrics['acc_digit_right']:.4f} "
+                f"acc_full={final_test_metrics['acc_expression']:.4f}",
+            )
+            
+            # Update best.pt and json on rank 0
+            if accelerator.is_main_process:
+                # 记录最终测试集指标进 checkpoint 字典
+                ckpt["test_metrics"] = final_test_metrics
+                # 也写入 model_metadata 以便写到 JSON 报告中
+                if "metrics" not in ckpt["model_metadata"]:
+                    ckpt["model_metadata"]["metrics"] = {}
+                ckpt["model_metadata"]["metrics"]["test_acc_expression"] = final_test_metrics["acc_expression"]
+                ckpt["model_metadata"]["metrics"]["test_loss"] = final_test_metrics["loss"]
+                
+                accelerator.save(ckpt, str(best_path))
+                
+                # 重新生成带 metrics 的 release 资产
+                release_path = Path(cfg.train.output_dir) / "release" / "pytorch" / f"{ckpt['model_metadata']['asset_stem']}.pt"
+                if release_path.exists():
+                    accelerator.save(ckpt, str(release_path))
+                    write_pytorch_release_manifest(
+                        output_dir=Path(cfg.train.output_dir) / "release",
+                        checkpoint_path=release_path,
+                        model_metadata=ckpt["model_metadata"],
+                    )
+
     accelerator.end_training()
 
 
@@ -1796,6 +1883,7 @@ def save_checkpoint(
     stop_reason: str | None,
     metrics_history: list[dict[str, Any]],
     save_latest: bool = True,
+    dataset_info: dict[str, Any] | None = None,
 ) -> None:
     """rank 0 写盘. DDP unwrap 后存 model_state_dict.
 
@@ -1810,6 +1898,15 @@ def save_checkpoint(
     unwrapped = accelerator.unwrap_model(model)
     cfg_dict = cfg_to_dict(cfg)
     model_metadata = build_model_metadata(cfg_dict)
+    
+    # 注入性能指标到 metadata 中, 以便随 release_manifest(model-assets.json) 发布
+    model_metadata["metrics"] = {
+        "val_acc_expression": float(best_acc),
+        "val_loss": float(best_val_loss),
+    }
+    if dataset_info:
+        model_metadata["dataset"] = dataset_info
+
     try:
         pip_list, pip_list_metadata = capture_pip_list_snapshot()
     except Exception as exc:
