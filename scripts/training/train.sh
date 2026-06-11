@@ -69,6 +69,12 @@ if [ -n "$RESUME_FROM" ]; then
     TRAIN_ARGS+=(--resume-from "$RESUME_FROM")
 fi
 
+# 如果 env 中指定了 SHMTU_EPOCHS, 则将其作为 CLI 参数传入以覆盖配置中的 epochs
+if [ -n "${SHMTU_EPOCHS:-}" ]; then
+    TRAIN_ARGS+=(--epochs "${SHMTU_EPOCHS}")
+    echo "[train] overriding epochs via SHMTU_EPOCHS=${SHMTU_EPOCHS}"
+fi
+
 accelerate launch \
     --num_processes "$SHMTU_NUM_GPUS" \
     --num_machines 1 \

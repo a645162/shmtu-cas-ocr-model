@@ -58,7 +58,7 @@ def collect_run_metadata(model: Any) -> dict[str, Any]:
     try:
         import torch as _torch
 
-        versions["torch"] = getattr(_torch, "__version__", None)
+        versions["torch"] = str(getattr(_torch, "__version__", None))
         try:
             versions["cuda"] = _torch.version.cuda if hasattr(_torch, "version") else None
         except Exception:

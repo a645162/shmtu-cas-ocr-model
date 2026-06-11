@@ -77,6 +77,8 @@ export SHMTU_PYTHON="${SHMTU_PYTHON:-python3}"
 export SHMTU_DYNAMO_BACKEND="${SHMTU_DYNAMO_BACKEND:-no}"
 export SHMTU_MIXED_PRECISION="${SHMTU_MIXED_PRECISION:-bf16}"
 export SHMTU_MAIN_PROCESS_PORT="${SHMTU_MAIN_PROCESS_PORT:-}"
+# Optional override for training epochs. If empty, CLI/YAML config governs epochs.
+export SHMTU_EPOCHS="${SHMTU_EPOCHS:-}"
 
 # 仓库根 (lib shmtu-cas-python 路径)
 export SHMTU_REPO_ROOT="${SHMTU_REPO_ROOT:-$(cd "$SHMTU_MODEL_ROOT/../.." && pwd)}"
