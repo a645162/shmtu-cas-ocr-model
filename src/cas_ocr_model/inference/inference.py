@@ -17,15 +17,15 @@ InferenceResult 字段:
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Protocol, Sequence, Union
+from typing import Protocol
 
 import numpy as np
 import torch
 
 from .preprocess import CaptchaPreprocess, build_preprocess
-
 
 # ----------------------------------------------------------------------------
 # Backend 协议
@@ -63,7 +63,7 @@ class InferenceResult:
     operator: str
     digit_right: str
     expression: str
-    result: Optional[int]
+    result: int | None
     confidence: float
     softmax: dict[str, list[float]] = field(default_factory=dict)
 
@@ -73,7 +73,7 @@ class InferenceResult:
 # ----------------------------------------------------------------------------
 
 
-def _safe_eval(d1: int, op: str, d2: int) -> Optional[int]:
+def _safe_eval(d1: int, op: str, d2: int) -> int | None:
     try:
         if op == "+":
             return d1 + d2
@@ -115,14 +115,14 @@ class CaptchaInferencer:
 
     # ---- 单图 / 批量 ----
 
-    def predict_one(self, image_input: Union[str, Path, bytes, np.ndarray]) -> InferenceResult:
+    def predict_one(self, image_input: str | Path | bytes | np.ndarray) -> InferenceResult:
         tensor = self.preprocess(image_input)  # (1, H, W)
         logits = self.backend.infer(tensor.unsqueeze(0))  # 加 batch 维
         results = self._logits_to_results(logits)
         return results[0]
 
-    def predict_batch(self, image_inputs: Sequence[Union[str, Path, bytes, np.ndarray]]) -> List[InferenceResult]:
-        out: List[InferenceResult] = []
+    def predict_batch(self, image_inputs: Sequence[str | Path | bytes | np.ndarray]) -> list[InferenceResult]:
+        out: list[InferenceResult] = []
         for start in range(0, len(image_inputs), self.config.batch_size):
             chunk = list(image_inputs[start : start + self.config.batch_size])
             tensors = [self.preprocess(x) for x in chunk]
@@ -133,10 +133,10 @@ class CaptchaInferencer:
 
     def predict_dir(
         self,
-        directory: Union[str, Path],
+        directory: str | Path,
         pattern: str = "*.jpg",
-        limit: Optional[int] = None,
-    ) -> List[tuple[str, InferenceResult]]:
+        limit: int | None = None,
+    ) -> list[tuple[str, InferenceResult]]:
         paths = sorted(Path(directory).glob(pattern))
         if limit is not None:
             paths = paths[:limit]
@@ -147,7 +147,7 @@ class CaptchaInferencer:
 
     # ---- 内部 ----
 
-    def _logits_to_results(self, logits: dict[str, np.ndarray]) -> List[InferenceResult]:
+    def _logits_to_results(self, logits: dict[str, np.ndarray]) -> list[InferenceResult]:
         dl = logits["digit_left_logits"]    # (B, 10)
         op = logits["operator_logits"]      # (B, 3)
         dr = logits["digit_right_logits"]   # (B, 10)
@@ -164,7 +164,7 @@ class CaptchaInferencer:
         idx_op = p_op.argmax(axis=-1)
         idx_dr = p_dr.argmax(axis=-1)
 
-        out: List[InferenceResult] = []
+        out: list[InferenceResult] = []
         for i in range(dl.shape[0]):
             d_l = self.digit_labels[idx_dl[i]]
             o = self.operator_labels[idx_op[i]]

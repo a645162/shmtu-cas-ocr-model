@@ -7,7 +7,6 @@ import string
 import urllib.request
 from pathlib import Path
 
-
 PROBE_USERNAME_PREFIX = "ds_cap_"
 PROBE_PASSWORD_LEN = 12
 PROBE_PASSWORD_CHARS = string.ascii_letters + string.digits

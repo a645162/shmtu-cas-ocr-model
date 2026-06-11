@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import shutil
-from typing import List
 
 import cv2
 import numpy as np
@@ -42,7 +41,7 @@ def _copy_images_to_clusters(
 
 
 def cluster_images(
-    input_directories: List[str],
+    input_directories: list[str],
     output_directory: str,
     num_clusters: int,
 ) -> None:

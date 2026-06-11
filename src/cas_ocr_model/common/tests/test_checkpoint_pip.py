@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 import torch
-
 from cas_ocr_model.common.checkpoint_pip import (
     extract_checkpoint_pip_list,
     load_checkpoint_pip_snapshot,

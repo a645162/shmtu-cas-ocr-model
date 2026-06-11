@@ -9,7 +9,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from .format import DatasetManifest, MANIFEST_FILENAME
+from .format import MANIFEST_FILENAME, DatasetManifest
 
 
 def collect_manifest_summary(dataset_root: str | Path) -> dict[str, Any]:

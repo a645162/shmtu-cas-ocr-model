@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -13,7 +12,7 @@ from torch.utils.flop_counter import FlopCounterMode
 class ModelStats:
     total_params: int
     trainable_params: int
-    flops: Optional[int]
+    flops: int | None
     input_shape: tuple[int, ...]
 
 
@@ -35,16 +34,15 @@ def _infer_model_device(model: nn.Module) -> torch.device:
 def estimate_flops(
     model: nn.Module,
     input_shape: tuple[int, ...],
-) -> Optional[int]:
+) -> int | None:
     """估算单次 forward FLOPs; 失败时返回 None."""
     device = _infer_model_device(model)
     was_training = model.training
     try:
         model.eval()
         dummy = torch.randn(*input_shape, device=device, dtype=torch.float32)
-        with torch.no_grad():
-            with FlopCounterMode(display=False) as counter:
-                model(dummy)
+        with torch.no_grad(), FlopCounterMode(display=False) as counter:
+            model(dummy)
         return int(counter.get_total_flops())
     except Exception:
         return None
@@ -75,7 +73,7 @@ def format_params_m(num_params: int) -> str:
     return f"{num_params / 1_000_000:.2f}M"
 
 
-def format_flops(num_flops: Optional[int]) -> str:
+def format_flops(num_flops: int | None) -> str:
     """按 MFLOPs / GFLOPs 显示单次 forward 计算量."""
     if num_flops is None:
         return "N/A"

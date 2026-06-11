@@ -13,8 +13,6 @@
 """
 from __future__ import annotations
 
-from typing import Optional
-
 import torch
 import torch.nn as nn
 
@@ -101,7 +99,7 @@ def predict_triple(
 def load_checkpoint(
     model: CaptchaTriSlotDecoderCNN,
     ckpt_path: str,
-    device: Optional[torch.device] = None,
+    device: torch.device | None = None,
 ) -> CaptchaTriSlotDecoderCNN:
     """加载权重. 兼容 DDP 保存的 state_dict (带 'module.' 前缀)."""
     sd = torch.load(ckpt_path, map_location=device or "cpu")
@@ -116,7 +114,7 @@ def load_checkpoint(
 
 def build_model_from_checkpoint(
     ckpt_path: str,
-    device: Optional[torch.device] = None,
+    device: torch.device | None = None,
 ) -> CaptchaTriSlotDecoderCNN:
     """从 checkpoint 中恢复模型结构配置并加载权重."""
     raw = torch.load(ckpt_path, map_location=device or "cpu")

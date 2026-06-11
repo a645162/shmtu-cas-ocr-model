@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from typing import Optional
 
-import cv2
 import numpy as np
 
 

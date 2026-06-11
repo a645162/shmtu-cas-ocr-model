@@ -6,7 +6,6 @@ from typing import Protocol
 
 import numpy as np
 import torch
-
 from cas_ocr_model.inference import CaptchaInferencer, InferencerConfig, PyTorchBackend
 from cas_ocr_model.model import inspect_checkpoint
 from cas_ocr_model.v1.inference.predictor import load_models, predict_validate_code

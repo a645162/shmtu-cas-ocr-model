@@ -23,7 +23,6 @@
 """
 from __future__ import annotations
 
-import argparse
 import csv
 import hashlib
 import json
@@ -38,17 +37,26 @@ from typing import Any
 
 import torch
 import torch.nn as nn
+from accelerate import Accelerator
+from accelerate.utils import set_seed
+from cas_ocr_model.common.checkpoint_pip import (
+    capture_pip_list_snapshot,
+    extract_checkpoint_pip_list,
+    write_pip_list_json,
+)
+from cas_ocr_model.common.console import AcceleratorConsole
+from cas_ocr_model.common.experiment_info import collect_experiment_metadata
+from cas_ocr_model.common.release_manifest import build_release_manifest
+from cas_ocr_model.datasets.format import DatasetManifest
+from cas_ocr_model.model import ModelStats
+from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
-from accelerate import Accelerator
-from accelerate.utils import set_seed
-
-from cas_ocr_model.datasets.format import DatasetManifest
 from .config import (
-    FullConfig,
     NUM_DIGIT_CLASSES,
     NUM_OPERATOR_CLASSES,
+    FullConfig,
     apply_env_overrides,
     cfg_to_dict,
     ensure_output_dir,
@@ -60,17 +68,6 @@ from .config import (
 from .data import CaptchaPairDataset, collate_triple
 from .losses import LossWeights, TriSlotDecoderLoss, compute_accuracy
 from .model import build_model_from_config, build_model_metadata
-from cas_ocr_model.model import ModelStats
-from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
-
-from cas_ocr_model.common.console import AcceleratorConsole
-from cas_ocr_model.common.checkpoint_pip import (
-    capture_pip_list_snapshot,
-    extract_checkpoint_pip_list,
-    write_pip_list_json,
-)
-from cas_ocr_model.common.release_manifest import build_release_manifest
-from cas_ocr_model.common.experiment_info import collect_experiment_metadata
 
 try:
     from rich.progress import (
@@ -1056,7 +1053,7 @@ def main() -> None:
         adaptive_c=cfg.data.adaptive_c,
         split="val",
     )
-    
+
     manifest_created_at = None
     manifest_digest = None
     manifest_path = Path(cfg.data.data_root) / "manifest.json"
@@ -1066,7 +1063,7 @@ def main() -> None:
             _m = DatasetManifest.load(cfg.data.data_root)
             has_test = bool(_m.splits.get("test"))
             manifest_created_at = _m.created_at
-            
+
             # 内联计算 SHA256 digest
             import hashlib
             d = hashlib.sha256()
@@ -1695,7 +1692,7 @@ def main() -> None:
     accelerator.wait_for_everyone()
 
     # ----------------------------------------------------
-    # 训练结束: 显式加载 best.pt, 并在 test 集上测试, 
+    # 训练结束: 显式加载 best.pt, 并在 test 集上测试,
     # 并将 test_metrics 写入 best.pt 与最终发布的 json (model-assets.json)
     # ----------------------------------------------------
     if test_loader is not None:
@@ -1707,7 +1704,7 @@ def main() -> None:
             model_state = ckpt.get("model_state_dict")
             if model_state is not None:
                 accelerator.unwrap_model(model).load_state_dict(model_state)
-            
+
             # Evaluate using best model
             final_test_metrics = evaluate(
                 accelerator,
@@ -1725,7 +1722,7 @@ def main() -> None:
                 f"acc_dr={final_test_metrics['acc_digit_right']:.4f} "
                 f"acc_full={final_test_metrics['acc_expression']:.4f}",
             )
-            
+
             # Update best.pt and json on rank 0
             if accelerator.is_main_process:
                 # 记录最终测试集指标进 checkpoint 字典
@@ -1741,9 +1738,9 @@ def main() -> None:
                 ckpt.setdefault("model_metadata", {})
                 ckpt["model_metadata"].setdefault("training", {})
                 ckpt["model_metadata"]["training"].update(exp_meta)
-                
+
                 accelerator.save(ckpt, str(best_path))
-                
+
                 # 重新生成带 metrics 的 release 资产
                 release_path = Path(cfg.train.output_dir) / "release" / "pytorch" / f"{ckpt['model_metadata']['asset_stem']}.pt"
                 if release_path.exists():
@@ -1908,7 +1905,7 @@ def save_checkpoint(
     unwrapped = accelerator.unwrap_model(model)
     cfg_dict = cfg_to_dict(cfg)
     model_metadata = build_model_metadata(cfg_dict)
-    
+
     # 注入性能指标到 metadata 中, 以便随 release_manifest(model-assets.json) 发布
     model_metadata["metrics"] = {
         "val_acc_expression": float(best_acc),

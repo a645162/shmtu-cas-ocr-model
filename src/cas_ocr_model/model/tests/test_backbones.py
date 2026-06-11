@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import torch
-
 from cas_ocr_model.model.backbones import (
     build_resnet_backbone,
     is_supported_backbone,

@@ -13,11 +13,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
-
 from cas_ocr_model.common.expression import parse_captcha_expression
+
 from .inference import CaptchaInferencer, InferenceResult
 
 # ----------------------------------------------------------------------------
@@ -48,7 +47,7 @@ class EvalMetrics:
 # ----------------------------------------------------------------------------
 
 
-def _parse_gt_expression(expr: str) -> Optional[tuple[int, str, int, Optional[int]]]:
+def _parse_gt_expression(expr: str) -> tuple[int, str, int, int | None] | None:
     """从 expression `1+2=` / `1加2等于3` 解出 (d1, op, d2, answer|None)."""
     parsed = parse_captcha_expression(expr)
     if parsed is None:
@@ -56,7 +55,7 @@ def _parse_gt_expression(expr: str) -> Optional[tuple[int, str, int, Optional[in
     return int(parsed.digit_left), parsed.operator, int(parsed.digit_right), parsed.answer
 
 
-def _safe_eval(d1: int, op: str, d2: int) -> Optional[int]:
+def _safe_eval(d1: int, op: str, d2: int) -> int | None:
     try:
         if op == "+": return d1 + d2
         if op == "-": return d1 - d2
@@ -92,9 +91,9 @@ def evaluate(
     inferencer: CaptchaInferencer,
     dataset_dir: str | Path,
     pattern: str = "*.jpg",
-    limit: Optional[int] = None,
-    digit_labels: Optional[list[str]] = None,
-    operator_labels: Optional[list[str]] = None,
+    limit: int | None = None,
+    digit_labels: list[str] | None = None,
+    operator_labels: list[str] | None = None,
 ) -> EvalMetrics:
     """在带 ground-truth 的数据集上评估.
 
@@ -118,7 +117,7 @@ def evaluate(
     if not paths:
         raise RuntimeError(f"no images found in {dataset_dir} matching {pattern}")
 
-    samples: list[tuple[Path, tuple[int, str, int, Optional[int]]]] = []
+    samples: list[tuple[Path, tuple[int, str, int, int | None]]] = []
     for jpg in paths:
         json_path = jpg.with_suffix(".json")
         if not json_path.is_file():

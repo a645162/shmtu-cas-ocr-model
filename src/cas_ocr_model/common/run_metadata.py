@@ -11,8 +11,8 @@ import platform
 import subprocess
 from typing import Any
 
-from cas_ocr_model.model.stats import count_parameters
 from cas_ocr_model.common.checkpoint_pip import capture_pip_list_snapshot
+from cas_ocr_model.model.stats import count_parameters
 
 
 def collect_run_metadata(model: Any) -> dict[str, Any]:

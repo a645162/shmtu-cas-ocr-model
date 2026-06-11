@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from typing import Tuple
 
 import cv2
 import numpy as np
@@ -46,7 +45,7 @@ def get_default_transform() -> transforms.Compose:
 def load_models(
     device: torch.device,
     pth_dir: str = pth_save_dir_path,
-) -> Tuple[torch.nn.Module, torch.nn.Module, torch.nn.Module]:
+) -> tuple[torch.nn.Module, torch.nn.Module, torch.nn.Module]:
     """加载等号/运算符/数字三个最新模型权重。"""
     from ..configs.defaults import (
         model_digit_type,
@@ -94,7 +93,7 @@ def predict_validate_code(
     model_operator: torch.nn.Module,
     model_digit: torch.nn.Module,
     print_result: bool = False,
-) -> Tuple[int, str, int, int, int, int]:
+) -> tuple[int, str, int, int, int, int]:
     """
     端到端预测：灰度 + 二值化 → 等号识别 → 切三段 → 运算符 + 两个数字。
 

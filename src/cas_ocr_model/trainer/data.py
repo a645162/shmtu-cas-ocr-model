@@ -18,14 +18,13 @@ from typing import Literal
 
 import cv2
 import torch
-from torch.utils.data import Dataset
-
-from cas_ocr_model.datasets.format import DatasetManifest, MANIFEST_FILENAME, scan_dataset
 from cas_ocr_model.common.expression import parse_captcha_expression
 from cas_ocr_model.common.preprocess import binarize_captcha, decode_color_image
-from .augment import augment_binary_image, sample_binarize_params
-from .config import AugmentationConfig, DIGIT2IDX, OP2IDX
+from cas_ocr_model.datasets.format import MANIFEST_FILENAME, DatasetManifest, scan_dataset
+from torch.utils.data import Dataset
 
+from .augment import augment_binary_image, sample_binarize_params
+from .config import DIGIT2IDX, OP2IDX, AugmentationConfig
 
 Split = Literal["train", "val", "test"]
 

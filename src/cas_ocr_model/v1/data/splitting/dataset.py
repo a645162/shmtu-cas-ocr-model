@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import random
 import shutil
-from typing import Sequence
+from collections.abc import Sequence
 
 
 def split_dataset(

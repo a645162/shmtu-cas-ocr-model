@@ -11,13 +11,12 @@
 from __future__ import annotations
 
 import pytest
-
+from cas_ocr_model.datasets.maker import scan_existing_max_index as maker_export
 from cas_ocr_model.datasets.maker.config import (
     build_arg_parser,
     format_eta,
     scan_existing_max_index,
 )
-from cas_ocr_model.datasets.maker import scan_existing_max_index as maker_export
 
 
 def test_scan_existing_max_index_empty_dir(tmp_path):

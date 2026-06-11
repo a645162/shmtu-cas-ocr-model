@@ -14,7 +14,7 @@ from selenium.webdriver.common.by import By
 from tqdm import tqdm
 from webdriver_manager.chrome import ChromeDriverManager
 
-from ..configs.paths import pth_save_dir_path, work_dir_path
+from ..configs.paths import work_dir_path
 from ..data_modules.device import get_recommended_device
 from ..helpers.filesystem import create_dir, get_now_time_str
 from ..inference.predictor import load_models, predict_validate_code

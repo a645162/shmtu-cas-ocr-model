@@ -9,8 +9,8 @@
 """
 from cas_ocr_model.model import (  # noqa: F401
     CaptchaTriSlotDecoderCNN,
-    build_model_from_config,
     build_model_from_checkpoint,
+    build_model_from_config,
     build_model_metadata,
     build_release_asset_stem,
     build_resnet_backbone,

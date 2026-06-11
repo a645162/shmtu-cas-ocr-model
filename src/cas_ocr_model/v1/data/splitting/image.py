@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from typing import List
 
 import cv2
 
@@ -11,7 +10,7 @@ from ...helpers.filesystem import create_dirs, divide_files_into_processes
 from ...helpers.image import split_image_by_ratio
 
 # 当前关键点列表（[0.25, 0.58, 0.75] 之类）
-_current_key_points: List[float] = []
+_current_key_points: list[float] = []
 # 当前输出基础目录
 _output_base_dir: str = ""
 
@@ -52,7 +51,7 @@ def _process_file(file_path: str) -> None:
 def start_splitting(
     source_dir: str,
     output_dir: str,
-    key_points: List[float],
+    key_points: list[float],
     num_processes: int = 10,
 ) -> None:
     """把 source_dir 下的图像按 key_points 切成多段，写到 output_dir/{0,1,...}。"""

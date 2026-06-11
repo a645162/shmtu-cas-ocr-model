@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-
 from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.trainer.config import DIGIT_LABELS, OPERATOR_LABELS
 

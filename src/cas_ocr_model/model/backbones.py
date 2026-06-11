@@ -20,11 +20,11 @@
 """
 from __future__ import annotations
 
-from typing import Callable, Dict, Tuple
+from collections.abc import Callable
 
+import timm
 import torch
 import torch.nn as nn
-import timm
 from torchvision import models
 
 TIMM_DYNAMIC_PREFIX = "timm/"
@@ -36,13 +36,13 @@ TIMM_DYNAMIC_HINT = "timm/<model_name>"
 # ----------------------------------------------------------------------------
 
 
-_BACKBONE_REGISTRY: Dict[str, Callable[[bool], Tuple[nn.Module, int]]] = {}
+_BACKBONE_REGISTRY: dict[str, Callable[[bool], tuple[nn.Module, int]]] = {}
 
 
 def _register(name: str):
     """注册 backbone 工厂. factory(pretrained) -> (model, feat_dim)."""
 
-    def deco(factory: Callable[[bool], Tuple[nn.Module, int]]) -> Callable[[bool], Tuple[nn.Module, int]]:
+    def deco(factory: Callable[[bool], tuple[nn.Module, int]]) -> Callable[[bool], tuple[nn.Module, int]]:
         _BACKBONE_REGISTRY[name] = factory
         return factory
 
@@ -84,14 +84,14 @@ def _to_grayscale_conv(conv: nn.Conv2d) -> nn.Conv2d:
     return gray
 
 
-def _spatialize_resnet(net: nn.Module) -> Tuple[nn.Module, int]:
+def _spatialize_resnet(net: nn.Module) -> tuple[nn.Module, int]:
     feat_dim = net.fc.in_features
     net.conv1 = _to_grayscale_conv(net.conv1)
     features = nn.Sequential(*list(net.children())[:-2])
     return features, feat_dim
 
 
-def _spatialize_mobilenet_v3(net: nn.Module) -> Tuple[nn.Module, int]:
+def _spatialize_mobilenet_v3(net: nn.Module) -> tuple[nn.Module, int]:
     first_conv = net.features[0][0]
     if not isinstance(first_conv, nn.Conv2d):
         raise TypeError("unexpected MobileNetV3 stem layout")
@@ -100,7 +100,7 @@ def _spatialize_mobilenet_v3(net: nn.Module) -> Tuple[nn.Module, int]:
     return net.features, feat_dim
 
 
-def _build_timm_spatial_backbone(model_name: str, pretrained: bool) -> Tuple[nn.Module, int]:
+def _build_timm_spatial_backbone(model_name: str, pretrained: bool) -> tuple[nn.Module, int]:
     backbone = timm.create_model(
         model_name,
         pretrained=pretrained,
@@ -118,12 +118,12 @@ def _build_timm_spatial_backbone(model_name: str, pretrained: bool) -> Tuple[nn.
 
 def _register_timm_alias(alias: str, model_name: str) -> None:
     @_register(alias)
-    def _factory(pretrained: bool, *, _model_name: str = model_name) -> Tuple[nn.Module, int]:
+    def _factory(pretrained: bool, *, _model_name: str = model_name) -> tuple[nn.Module, int]:
         return _build_timm_spatial_backbone(_model_name, pretrained)
 
 
 @_register("resnet18")
-def _resnet18(pretrained: bool) -> Tuple[nn.Module, int]:
+def _resnet18(pretrained: bool) -> tuple[nn.Module, int]:
     net = models.resnet18(
         weights=models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
     )
@@ -131,7 +131,7 @@ def _resnet18(pretrained: bool) -> Tuple[nn.Module, int]:
 
 
 @_register("resnet34")
-def _resnet34(pretrained: bool) -> Tuple[nn.Module, int]:
+def _resnet34(pretrained: bool) -> tuple[nn.Module, int]:
     net = models.resnet34(
         weights=models.ResNet34_Weights.IMAGENET1K_V1 if pretrained else None
     )
@@ -139,7 +139,7 @@ def _resnet34(pretrained: bool) -> Tuple[nn.Module, int]:
 
 
 @_register("mobilenet_v3_small")
-def _mobilenet_v3_small(pretrained: bool) -> Tuple[nn.Module, int]:
+def _mobilenet_v3_small(pretrained: bool) -> tuple[nn.Module, int]:
     net = models.mobilenet_v3_small(
         weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1 if pretrained else None
     )
@@ -147,7 +147,7 @@ def _mobilenet_v3_small(pretrained: bool) -> Tuple[nn.Module, int]:
 
 
 @_register("mobilenet_v3_large")
-def _mobilenet_v3_large(pretrained: bool) -> Tuple[nn.Module, int]:
+def _mobilenet_v3_large(pretrained: bool) -> tuple[nn.Module, int]:
     net = models.mobilenet_v3_large(
         weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V2 if pretrained else None
     )
@@ -219,7 +219,7 @@ def resolve_backbone_name(name: str) -> str:
 def build_resnet_backbone(
     name: str = "resnet18",
     pretrained: bool = True,
-) -> Tuple[nn.Module, int]:
+) -> tuple[nn.Module, int]:
     """按名称构造 backbone.
 
     Args:

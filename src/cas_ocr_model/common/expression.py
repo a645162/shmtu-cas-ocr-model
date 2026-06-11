@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
-
 
 CANONICAL_OPERATOR_LABELS: tuple[str, ...] = ("+", "-", "*")
 OPERATOR_ALIASES: dict[str, str] = {
@@ -33,22 +31,22 @@ class ParsedExpression:
     digit_left: str
     operator: str
     digit_right: str
-    equal_token: Optional[str] = None
-    answer: Optional[int] = None
+    equal_token: str | None = None
+    answer: int | None = None
 
 
 def _strip_spaces(text: str) -> str:
     return "".join(str(text).split())
 
 
-def _match_prefix(text: str, candidates: list[str]) -> Optional[str]:
+def _match_prefix(text: str, candidates: list[str]) -> str | None:
     for token in candidates:
         if text.startswith(token):
             return token
     return None
 
 
-def parse_captcha_expression(expr: str) -> Optional[ParsedExpression]:
+def parse_captcha_expression(expr: str) -> ParsedExpression | None:
     """解析 `1+2=` / `1加2等于3` 这类验证码表达式."""
     text = _strip_spaces(expr)
     if len(text) < 3 or not text[0].isdigit():
@@ -68,14 +66,14 @@ def parse_captcha_expression(expr: str) -> Optional[ParsedExpression]:
     digit_right = rest[0]
     rest = rest[1:]
 
-    equal_token: Optional[str] = None
+    equal_token: str | None = None
     if rest:
         eq_token = _match_prefix(rest, _SORTED_EQUAL_ALIASES)
         if eq_token is not None:
             equal_token = eq_token
             rest = rest[len(eq_token):]
 
-    answer: Optional[int] = None
+    answer: int | None = None
     if rest:
         if not rest.isdigit():
             return None

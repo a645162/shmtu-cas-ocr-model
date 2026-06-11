@@ -5,14 +5,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
-
+from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.model import build_model_from_checkpoint
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
-from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.trainer.config import (
     DIGIT_LABELS,
     OPERATOR_LABELS,

@@ -20,6 +20,7 @@ from .captcha_trislot_decoder_cnn import (
     load_checkpoint,
     predict_triple,
 )
+from .heads import TriSlotDecoder
 from .registry import (
     build_model_from_config,
     build_model_metadata,
@@ -30,7 +31,6 @@ from .registry import (
     list_model_versions,
     normalize_model_version,
 )
-from .heads import TriSlotDecoder
 from .stats import (
     ModelStats,
     collect_model_stats,

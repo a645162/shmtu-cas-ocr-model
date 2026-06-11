@@ -16,7 +16,6 @@ import numpy as np
 import torch
 import torch.distributed as dist
 from accelerate import Accelerator
-
 from cas_ocr_model.common.expression import parse_captcha_expression
 from cas_ocr_model.datasets.format import DatasetManifest
 from cas_ocr_model.trainer.config import DIGIT_LABELS, OPERATOR_LABELS

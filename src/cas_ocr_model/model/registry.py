@@ -1,15 +1,16 @@
 """模型版本注册表与发布资产命名."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import torch
 import torch.nn as nn
-
 from cas_ocr_model.common.release_manifest import iter_manifest_artifacts
+
 from .backbones import is_supported_backbone, list_available_backbones
 from .versions import MODEL_FAMILY as DEFAULT_MODEL_FAMILY
 from .versions import MODEL_VERSION as DEFAULT_MODEL_VERSION

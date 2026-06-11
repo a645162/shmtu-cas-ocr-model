@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 import cv2
 import numpy as np
@@ -38,7 +38,7 @@ def _preprocess(image_path: str) -> np.ndarray:
 def infer_with_openvino(
     image_path: str,
     model_name: str = "resnet34_digit_latest",
-    model_dir: Optional[str] = None,
+    model_dir: str | None = None,
 ) -> int:
     """
     跑一次 OpenVINO 推理并返回 argmax。

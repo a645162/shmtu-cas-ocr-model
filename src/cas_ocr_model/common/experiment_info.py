@@ -1,7 +1,6 @@
 """实验元信息收集：超参、时间戳、tracker 信息等。"""
 from __future__ import annotations
 
-import time
 from typing import Any
 
 

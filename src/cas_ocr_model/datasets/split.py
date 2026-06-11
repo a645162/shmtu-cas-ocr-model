@@ -28,7 +28,6 @@ from cas_ocr_model.common.console import tag_print
 
 from .format import DatasetManifest, scan_dataset
 
-
 # ----------------------------------------------------------------------------
 # 核心分割
 # ----------------------------------------------------------------------------

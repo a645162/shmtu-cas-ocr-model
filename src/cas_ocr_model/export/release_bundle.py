@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any
 
 import torch
-
 from cas_ocr_model.common.checkpoint_pip import (
     load_checkpoint_pip_snapshot,
     write_pip_list_json,

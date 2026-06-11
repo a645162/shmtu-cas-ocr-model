@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from time import sleep as time_sleep
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -18,7 +17,7 @@ from ..models.resnet import init_model
 def train_model(
     device: torch.device,
     data_loader_train: DataLoader,
-    data_loader_val: Optional[DataLoader] = None,
+    data_loader_val: DataLoader | None = None,
     model_type: ModelType = ModelType.ResNet_18,
     output_features_count: int = 6,
     pretrain: bool = True,

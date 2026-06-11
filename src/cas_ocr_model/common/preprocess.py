@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 import torch
 
-
 BINARIZE_MODES = (
     "min_channel_otsu",
     "gray_otsu",

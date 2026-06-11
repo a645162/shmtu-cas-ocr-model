@@ -23,7 +23,7 @@ import json
 import sys
 from pathlib import Path
 
-from cas_ocr_model.common.console import tag_print, get_console
+from cas_ocr_model.common.console import tag_print
 
 from .inference import CaptchaInferencer, InferencerConfig
 

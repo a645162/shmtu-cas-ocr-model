@@ -11,7 +11,7 @@ import json
 import os
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from cas_ocr_model.common.expression import CANONICAL_OPERATOR_LABELS
 from cas_ocr_model.common.preprocess import BINARIZE_MODES
@@ -41,7 +41,7 @@ def resolve_mixed_precision_default() -> str:
     return "bf16"
 
 
-def apply_env_overrides(cfg: "FullConfig") -> "FullConfig":
+def apply_env_overrides(cfg: FullConfig) -> FullConfig:
     """把环境变量覆盖应用到运行时配置上, 仅处理约定好的公共入口变量."""
     cfg.train.mixed_precision = resolve_mixed_precision_default()
     return cfg
@@ -202,7 +202,7 @@ class TrainConfig:
     gradient_accumulation_steps: int = 1
     """梯度累积, 进一步放大 effective batch."""
 
-    resume_from: Optional[str] = None
+    resume_from: str | None = None
     """checkpoint 路径, 断点续训."""
 
     report_to: str = "auto"
@@ -211,10 +211,10 @@ class TrainConfig:
     tracker_project_name: str = "cas-ocr-train"
     """accelerate tracker project 名称."""
 
-    wandb_run_name: Optional[str] = None
+    wandb_run_name: str | None = None
     """可选 wandb run name. 不填时默认按 output_dir 自动生成."""
 
-    wandb_entity: Optional[str] = None
+    wandb_entity: str | None = None
     """可选 wandb entity / team."""
 
     wandb_tags: list[str] = field(default_factory=list)
@@ -286,7 +286,7 @@ class FullConfig:
 # ----------------------------------------------------------------------------
 
 
-def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """解析 train.py 的命令行参数. 解析结果与 FullConfig 字段一一对应."""
     p = argparse.ArgumentParser(description="CAS CAPTCHA 3-head DDP 训练 (accelerate)")
     p.add_argument("--config", type=str, default=None,

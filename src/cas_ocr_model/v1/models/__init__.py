@@ -1,12 +1,12 @@
 """神经网络模型层（懒加载第三方依赖）。"""
 
-from .registry import ModelType, get_pth_name, model_type_to_path_str
 from .operator_enum import (
     OperatorEnum,
+    calculate_operator,
     get_operator_type_by_int,
     get_operator_type_str,
-    calculate_operator,
 )
+from .registry import ModelType, get_pth_name, model_type_to_path_str
 
 __all__ = [
     "ModelType",

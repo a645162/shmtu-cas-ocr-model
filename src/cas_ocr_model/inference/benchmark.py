@@ -9,12 +9,9 @@ import platform
 import time
 import tracemalloc
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
-
 from cas_ocr_model.common.console import print_benchmark_table
 
 from .inference import CaptchaInferencer
@@ -31,7 +28,7 @@ class LatencyStats:
     max_ms: float = 0.0
 
     @staticmethod
-    def from_samples(samples_ms: list[float]) -> "LatencyStats":
+    def from_samples(samples_ms: list[float]) -> LatencyStats:
         if not samples_ms:
             return LatencyStats()
         arr = np.asarray(samples_ms, dtype=np.float64)

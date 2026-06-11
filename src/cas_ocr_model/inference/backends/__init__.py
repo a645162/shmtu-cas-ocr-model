@@ -8,7 +8,6 @@ from __future__ import annotations
 from importlib import import_module
 from importlib.util import find_spec
 
-
 _BACKEND_REGISTRY: dict[str, tuple[str, str, str]] = {
     "PyTorchBackend": (".pytorch_backend", "PyTorchBackend", "torch"),
     "OnnxBackend": (".onnx_backend", "OnnxBackend", "onnxruntime"),

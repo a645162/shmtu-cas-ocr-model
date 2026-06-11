@@ -14,7 +14,6 @@ from .config import (
     scan_existing_max_index,
 )
 
-
 _LAZY_EXPORTS: dict[str, str] = {
     "OcrBackend": ".ocr_backends:OcrBackend",
     "OcrModel": ".ocr_backends:OcrModel",

@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from multiprocessing import Manager, get_context
+from multiprocessing import get_context
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +58,7 @@ def spawn_workers(args: argparse.Namespace) -> None:
     progress_ctx: Any = None
     task_id: Any = None
     try:
+        from rich.console import Console
         from rich.progress import (
             BarColumn,
             MofNCompleteColumn,
@@ -67,7 +68,6 @@ def spawn_workers(args: argparse.Namespace) -> None:
             TextColumn,
             TimeRemainingColumn,
         )
-        from rich.console import Console
 
         # 非 tty 时禁用 rich (重定向到 log 文件会污染输出)
         console = Console(file=sys.stderr, force_terminal=sys.stderr.isatty(), soft_wrap=True)

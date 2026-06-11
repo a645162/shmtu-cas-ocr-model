@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import os
 
-from torchvision import transforms
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
-from ...configs.defaults import model_digit_type, pth_save_dir_path, work_dir_path
+from ...configs.defaults import model_digit_type, pth_save_dir_path
 from ...data_modules.dataset import CustomDataset
 from ...data_modules.device import get_recommended_device
 from ...training.classification import classify_by_model

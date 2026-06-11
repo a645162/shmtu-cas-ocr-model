@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, List
 
 
 def create_dir(directory: str) -> None:
@@ -13,7 +13,7 @@ def create_dir(directory: str) -> None:
         os.makedirs(directory)
 
 
-def create_dirs(directories: List[str]) -> None:
+def create_dirs(directories: list[str]) -> None:
     for d in directories:
         create_dir(d)
 
@@ -34,9 +34,9 @@ def get_output_dir(
     return os.path.join(output_dir_path, file_name + file_ext)
 
 
-def get_all_files(directory: str, include_subdir: bool = False) -> List[str]:
+def get_all_files(directory: str, include_subdir: bool = False) -> list[str]:
     """列出目录下所有文件，可选递归。"""
-    all_files: List[str] = []
+    all_files: list[str] = []
     if not os.path.exists(directory):
         return all_files
     if include_subdir:
@@ -52,7 +52,7 @@ def get_all_files(directory: str, include_subdir: bool = False) -> List[str]:
     return [f.strip() for f in all_files if f.strip() and os.path.isfile(f)]
 
 
-def process_files(file_list: List[str], handle_func: Callable[[str], None]) -> None:
+def process_files(file_list: list[str], handle_func: Callable[[str], None]) -> None:
     """用进程池并行处理一个文件列表。"""
     with multiprocessing.Pool() as pool:
         pool.map(handle_func, file_list)
@@ -81,7 +81,7 @@ def divide_files_into_processes(
         process_count = 1
 
     files_per_process = len(all_files) // process_count
-    divided: List[List[str]] = []
+    divided: list[list[str]] = []
     res_files = list(all_files)
 
     for _ in range(process_count):

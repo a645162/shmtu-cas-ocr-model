@@ -1,8 +1,9 @@
 """Release manifest 结构化与兼容读取工具."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any
 
 
 def _normalize_artifact_files(raw_files: Any) -> list[dict[str, Any]]:

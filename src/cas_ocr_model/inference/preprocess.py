@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
-
 from cas_ocr_model.common.preprocess import decode_color_image, preprocess_captcha_to_tensor
 
 

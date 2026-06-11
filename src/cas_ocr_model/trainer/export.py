@@ -18,10 +18,10 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-
-from .model import build_model_from_checkpoint
 from cas_ocr_model.common.console import tag_print
 from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
+
+from .model import build_model_from_checkpoint
 
 
 class ExportWrapper(nn.Module):

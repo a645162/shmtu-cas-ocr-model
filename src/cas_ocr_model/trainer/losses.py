@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -31,7 +30,7 @@ class TriSlotDecoderLoss(nn.Module):
         slot_margin: float = 0.10,
         slot_right_boundary_max: float = 0.68,
         slot_attention_max_variance: float = 0.035,
-        operator_class_weights: Optional[list[float]] = None,
+        operator_class_weights: list[float] | None = None,
     ) -> None:
         super().__init__()
         self.weights = weights or LossWeights()

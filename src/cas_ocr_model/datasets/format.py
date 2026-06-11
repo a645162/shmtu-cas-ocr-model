@@ -46,12 +46,12 @@ class DatasetManifest:
         return json.dumps(asdict(self), ensure_ascii=False, indent=2)
 
     @classmethod
-    def from_json(cls, s: str) -> "DatasetManifest":
+    def from_json(cls, s: str) -> DatasetManifest:
         raw = json.loads(s)
         return cls(**raw)
 
     @classmethod
-    def load(cls, dataset_root: str | Path) -> "DatasetManifest":
+    def load(cls, dataset_root: str | Path) -> DatasetManifest:
         path = Path(dataset_root) / MANIFEST_FILENAME
         if not path.is_file():
             raise FileNotFoundError(

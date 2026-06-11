@@ -7,18 +7,14 @@
 from __future__ import annotations
 
 import argparse
-import math
-from pathlib import Path
-
-import torch
-from torch.utils.data import DataLoader
 
 from accelerate import Accelerator
 from accelerate.utils import set_seed
-
 from cas_ocr_model.common.console import AcceleratorConsole
+from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
+from torch.utils.data import DataLoader
+
 from .config import (
-    FullConfig,
     apply_env_overrides,
     load_config,
     load_config_from_checkpoint,
@@ -26,7 +22,6 @@ from .config import (
 from .data import CaptchaPairDataset, collate_triple
 from .losses import LossWeights, TriSlotDecoderLoss
 from .model import build_model_from_checkpoint
-from cas_ocr_model.model.stats import collect_model_stats, format_model_stats
 from .train import evaluate
 
 
