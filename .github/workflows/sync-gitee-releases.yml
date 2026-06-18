@@ -15,7 +15,6 @@ permissions:
 jobs:
   sync-gitee:
     runs-on: ubuntu-24.04
-    if: ${{ secrets.GITEE_TOKEN != '' && secrets.GITEE_USERNAME != '' && secrets.GITEE_REPO != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -26,6 +25,17 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
+      - name: Validate Gitee Secrets
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO }}
+        run: |
+          set -euo pipefail
+          : "${GITEE_TOKEN:?missing secret GITEE_TOKEN}"
+          : "${GITEE_USERNAME:?missing secret GITEE_USERNAME}"
+          : "${GITEE_REPO:?missing secret GITEE_REPO}"
 
       - name: Configure Gitee Remote
         env:
