@@ -1,0 +1,103 @@
+name: Sync Gitee Releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only report differences without pushing tags or uploading releases
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  sync-gitee:
+    runs-on: ubuntu-24.04
+    if: ${{ secrets.GITEE_TOKEN != '' && secrets.GITEE_USERNAME != '' && secrets.GITEE_REPO != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Configure Gitee Remote
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO }}
+        run: |
+          set -euo pipefail
+          git remote remove gitee 2>/dev/null || true
+          git remote add gitee "https://${GITEE_USERNAME}:${GITEE_TOKEN}@gitee.com/${GITEE_REPO}.git"
+          git fetch --force --tags origin
+
+      - name: Compare GitHub And Gitee Tags
+        run: |
+          set -euo pipefail
+          git for-each-ref refs/tags --format='%(refname:short) %(objectname)' | sort > github-tags.txt
+          git ls-remote --tags gitee | awk '!/\^\{\}$/ {sub("refs/tags/", "", $2); print $2 " " $1}' | sort > gitee-tags.txt
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def read_map(path: str) -> dict[str, str]:
+              items: dict[str, str] = {}
+              for line in Path(path).read_text(encoding="utf-8").splitlines():
+                  if not line.strip():
+                      continue
+                  tag, sha = line.split()
+                  items[tag] = sha
+              return items
+
+          gh = read_map("github-tags.txt")
+          ge = read_map("gitee-tags.txt")
+
+          gh_only = sorted(tag for tag in gh if tag not in ge)
+          ge_only = sorted(tag for tag in ge if tag not in gh)
+          changed = sorted(tag for tag in gh if tag in ge and gh[tag] != ge[tag])
+
+          print(f"github tags: {len(gh)}")
+          print(f"gitee tags: {len(ge)}")
+          print(f"github only: {len(gh_only)}")
+          print(f"gitee only: {len(ge_only)}")
+          print(f"sha changed: {len(changed)}")
+
+          if gh_only:
+              print("github only tags:")
+              for tag in gh_only:
+                  print(f"  {tag} {gh[tag]}")
+          if ge_only:
+              print("gitee only tags:")
+              for tag in ge_only:
+                  print(f"  {tag} {ge[tag]}")
+          if changed:
+              print("changed tags:")
+              for tag in changed:
+                  print(f"  {tag} github={gh[tag]} gitee={ge[tag]}")
+          PY
+
+      - name: Mirror Tags To Gitee
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          set -euo pipefail
+          git push --force --prune gitee 'refs/tags/*:refs/tags/*'
+
+      - name: Sync GitHub Releases To Gitee
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          python3 scripts/release/sync_gitee_releases.py --all-releases "${args[@]}"
