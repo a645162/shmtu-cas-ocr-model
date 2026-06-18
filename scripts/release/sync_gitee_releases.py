@@ -368,18 +368,24 @@ def load_desired_assets_from_github(release: dict[str, Any]) -> list[DesiredAsse
 
 
 def build_release_payload(release: dict[str, Any]) -> dict[str, Any]:
+    tag = release["tag_name"]
+    body = (release.get("body") or "").strip()
+    if not body:
+        body = f"Synced from GitHub release {tag}."
     return {
-        "tag_name": release["tag_name"],
+        "tag_name": tag,
         "target_commitish": release.get("target_commitish") or "",
         "prerelease": bool(release.get("prerelease")),
-        "name": release.get("name") or release["tag_name"],
-        "body": release.get("body") or "",
+        "name": release.get("name") or tag,
+        "body": body,
     }
 
 
 def same_release_metadata(github_release: dict[str, Any], gitee_release: dict[str, Any]) -> bool:
     github_name = github_release.get("name") or github_release["tag_name"]
-    github_body = github_release.get("body") or ""
+    github_body = (github_release.get("body") or "").strip()
+    if not github_body:
+        github_body = f"Synced from GitHub release {github_release['tag_name']}."
     github_commitish = github_release.get("target_commitish") or ""
     return (
         (gitee_release.get("name") or "") == github_name
