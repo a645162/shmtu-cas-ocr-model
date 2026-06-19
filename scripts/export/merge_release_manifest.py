@@ -81,17 +81,22 @@ def build_release_manifest(
     }
 
 
-def compute_sha256sums(output_root: Path) -> tuple[Path, int]:
-    """计算 SHA256SUMS.txt, 排除 _meta_*.json 中间文件."""
+def compute_sha256sums(output_root: Path, manifest: dict[str, Any]) -> tuple[Path, int]:
+    """仅对真正的 release 资产计算 SHA256SUMS.txt."""
     digest_path = output_root / "SHA256SUMS.txt"
-    files = sorted(
-        path
-        for path in output_root.rglob("*")
-        if path.is_file()
-        and path.resolve() != digest_path.resolve()
-        and "__pycache__" not in path.parts
-        and not path.name.startswith("_meta_")
-    )
+    files: list[Path] = []
+    seen: set[Path] = set()
+
+    for artifact in manifest.get("artifacts", []):
+        for file_info in artifact.get("files", []):
+            rel_path = Path(file_info["path"])
+            abs_path = (output_root / rel_path).resolve()
+            if abs_path in seen or not abs_path.is_file():
+                continue
+            seen.add(abs_path)
+            files.append(abs_path)
+
+    files.sort()
     lines: list[str] = []
     for path in files:
         rel = path.relative_to(output_root).as_posix()
@@ -185,7 +190,7 @@ def main() -> None:
     print(f"[merge] Manifest -> {manifest_path}")
 
     # 计算 SHA256SUMS.txt
-    digest_path, file_count = compute_sha256sums(output_root)
+    digest_path, file_count = compute_sha256sums(output_root, manifest)
     print(f"[merge] Digest -> {digest_path} ({file_count} 文件)")
 
     # 更新 manifest 中的 digest 条目

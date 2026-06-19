@@ -116,7 +116,7 @@ def cleanup_release_directory(directory: Path) -> None:
         path.unlink(missing_ok=True)
 
     for path in directory.rglob("*.py"):
-        if path.name.endswith("_pnnx.py"):
+        if path.name.endswith("_pnnx.py") or path.name.endswith("_ncnn.py"):
             path.unlink(missing_ok=True)
 
 
