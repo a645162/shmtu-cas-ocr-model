@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import http.client
 import json
+import json.decoder
 import mimetypes
 import os
 import re
@@ -1059,15 +1060,30 @@ def prepare_gitee_release_assets(github: GitHubClient, github_release: dict[str,
 
     cache_root = get_download_cache_dir(f"{github.owner}/{github.repo}", tag)
     cache_root.mkdir(parents=True, exist_ok=True)
-    manifest_path = github.download_asset(
-        DesiredAsset(
-            name=MANIFEST_ASSET_NAME,
-            size=int(source_manifest_asset["size"]),
-            download_url=str(source_manifest_asset["browser_download_url"]),
-        ),
-        cache_root,
+    manifest_asset = DesiredAsset(
+        name=MANIFEST_ASSET_NAME,
+        size=int(source_manifest_asset["size"]),
+        download_url=str(source_manifest_asset["browser_download_url"]),
     )
-    raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    raw_manifest: dict[str, Any] | None = None
+    manifest_path: Path | None = None
+    for attempt in range(1, 3):
+        manifest_path = github.download_asset(manifest_asset, cache_root)
+        try:
+            raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            break
+        except json.decoder.JSONDecodeError as exc:
+            if attempt >= 2:
+                raise ApiError(
+                    f"{tag}: cached {MANIFEST_ASSET_NAME} is invalid JSON after redownload: {exc}"
+                ) from exc
+            log(
+                f"[retry] {tag}: cached {MANIFEST_ASSET_NAME} is invalid JSON; "
+                "purging cache and redownloading"
+            )
+            purge_cached_assets(cache_root, [MANIFEST_ASSET_NAME])
+    assert manifest_path is not None
+    assert raw_manifest is not None
     _, _, selected_asset_names = plan_gitee_v2_slim_assets(raw_manifest)
     log(
         f"[filter] {tag}: keeping {len(selected_asset_names)} asset(s) "

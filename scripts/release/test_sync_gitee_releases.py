@@ -21,6 +21,7 @@ select_latest_release = sync_gitee_releases.select_latest_release
 plan_gitee_v2_slim_assets = sync_gitee_releases.plan_gitee_v2_slim_assets
 write_gitee_v2_slim_bundle = sync_gitee_releases.write_gitee_v2_slim_bundle
 purge_obsolete_gitee_v2_releases = sync_gitee_releases.purge_obsolete_gitee_v2_releases
+prepare_gitee_release_assets = sync_gitee_releases.prepare_gitee_release_assets
 MANIFEST_ASSET_NAME = sync_gitee_releases.MANIFEST_ASSET_NAME
 DIGEST_ASSET_NAME = sync_gitee_releases.DIGEST_ASSET_NAME
 
@@ -281,3 +282,79 @@ def test_plan_asset_sync_prunes_extra_assets_from_latest_gitee_tag() -> None:
         ("resnet34.onnx", 6),
     ]
     assert plan.upload == []
+
+
+def test_prepare_gitee_release_assets_purges_invalid_manifest_cache(tmp_path, monkeypatch) -> None:
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    (cache_root / MANIFEST_ASSET_NAME).write_text('{"broken": true}{"extra": true}', encoding="utf-8")
+
+    class FakeGitHub:
+        owner = "owner"
+        repo = "repo"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def download_asset(self, asset, dest_dir):
+            self.calls += 1
+            path = Path(dest_dir) / asset.name
+            if asset.name == MANIFEST_ASSET_NAME:
+                path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 2,
+                            "generated_at_utc": "2026-06-19T00:00:00Z",
+                            "models": [
+                                {
+                                    "asset_stem": "mobilenet_v3_small.trislot_decoder.v2_0",
+                                    "backbone": "mobilenet_v3_small",
+                                }
+                            ],
+                            "artifacts": [
+                                {
+                                    "asset_stem": "mobilenet_v3_small.trislot_decoder.v2_0",
+                                    "engine": "pytorch",
+                                    "precision": "fp32",
+                                    "files": [
+                                        {
+                                            "path": "pytorch/v3.pt",
+                                            "release_asset_name": "mobilenet_v3_small.pt",
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            else:
+                path.write_bytes(b"v3")
+            return path
+
+    monkeypatch.setattr(sync_gitee_releases, "get_download_cache_dir", lambda repo_slug, tag: cache_root)
+    github = FakeGitHub()
+    release = {
+        "tag_name": "v2.0.5",
+        "assets": [
+            {
+                "name": MANIFEST_ASSET_NAME,
+                "size": 100,
+                "browser_download_url": "https://example.invalid/model-assets.json",
+            },
+            {
+                "name": "mobilenet_v3_small.pt",
+                "size": 2,
+                "browser_download_url": "https://example.invalid/mobilenet_v3_small.pt",
+            },
+        ],
+    }
+
+    desired_assets = prepare_gitee_release_assets(github, release)
+
+    assert [asset.name for asset in desired_assets] == [
+        "mobilenet_v3_small.pt",
+        MANIFEST_ASSET_NAME,
+        DIGEST_ASSET_NAME,
+    ]
+    assert github.calls >= 2
