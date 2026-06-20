@@ -57,6 +57,36 @@ def _to_pascal_case(snake: str) -> str:
     return "".join(p[:1].upper() + p[1:] for p in parts)
 
 
+def _is_version_token(s: str) -> bool:
+    """判断字符串是否是 version 段: 'v2_0' / '2_0' / 'v1.0' 等.
+
+    版本特征:
+    - 纯数字 (e.g. "2", "210", "0")
+    - v/V 开头后跟数字 (e.g. "v2_0", "V1.0", "v3.0.0")
+    - 数字开头, 后跟 _ 或 . + 数字, 不含字母 (e.g. "2_0", "2.0.1")
+    - backbone 特征: 含字母数字下划线且其中包含字母单词 (mobilenet_v3_small 含 "mobilenet")
+    区分: 有字母下划线不算 version, 纯数字下划线算 version
+    """
+    if not s:
+        return False
+    # 纯数字
+    if s.isdigit():
+        return True
+    # v/V 开头 + 数字
+    if s[0] in "vV" and len(s) >= 2 and s[1].isdigit():
+        return True
+    # 数字开头, 后续只含数字/下划线/点 (e.g. "2_0", "2.0.1", "2_0_1")
+    if s[0].isdigit():
+        ok = True
+        for ch in s:
+            if not (ch.isdigit() or ch in "_."):
+                ok = False
+                break
+        if ok:
+            return True
+    return False
+
+
 def friendly_model_name(
     asset_stem: str,
     backbone: str = "",
@@ -70,6 +100,9 @@ def friendly_model_name(
     例: `mobilenet_v3_small.trislot_decoder.v2_0`
     →  `MobileNetV3-Small + TriSlot Decoder + v2.0`
 
+    解析策略: 三段或两段都支持, 末段识别为 version (数字开头或 v 开头).
+    当有四段或更多 (如 backbone/family/v1.0), 末段是 v1.0, 倒数第二段是 family.
+
     Parameters
     ----------
     asset_stem : str
@@ -79,20 +112,44 @@ def friendly_model_name(
     family : str, optional
         同 backbone
     separator : str, optional
-        分隔符, 默认 " + " (用户要求 "MobileNet-Small+TriSlot Decoder" 形式)
+        分隔符, 默认 " + "
     """
     parts = [p for p in asset_stem.split(".") if p]
-    bb_raw = parts[0] if parts else backbone
-    fa_raw = parts[1] if len(parts) > 1 else family
-    ver_raw = parts[2] if len(parts) > 2 else ""
+    if not parts:
+        # 退回到 backbone / family 字段 (历史 manifest 兼容)
+        bb = _BACKBONE_DISPLAY_NAMES.get(backbone.lower(), _to_pascal_case(backbone))
+        fa = _FAMILY_DISPLAY_NAMES.get(family.lower(), _to_pascal_case(family))
+        return separator.join(p for p in (bb, fa) if p)
+
+    # 从后往前找 version token, 合并连续的 ver/数字 token 为完整版本号
+    ver_end = len(parts)  # 第一个非 version token 的位置
+    for i in range(len(parts) - 1, -1, -1):
+        if _is_version_token(parts[i]):
+            ver_end = i
+        else:
+            break
+
+    if ver_end < len(parts):
+        bb_raw = parts[0] if ver_end > 1 else backbone
+        fa_raw = ".".join(parts[1:ver_end]) if ver_end > 1 else (parts[1] if ver_end == 1 else family)
+        ver_raw = ".".join(parts[ver_end:])
+    elif len(parts) >= 2:
+        bb_raw = parts[0]
+        fa_raw = ".".join(parts[1:])
+        ver_raw = ""
+    else:
+        bb_raw = parts[0]
+        fa_raw = family
+        ver_raw = ""
 
     bb = _BACKBONE_DISPLAY_NAMES.get(bb_raw.lower(), _to_pascal_case(bb_raw))
     fa = _FAMILY_DISPLAY_NAMES.get(fa_raw.lower(), _to_pascal_case(fa_raw))
-    # version 形如 v2_0 或 2_0 → v2.0 (asset_stem 末段已带 'v' 前缀)
+    # version 兼容 "v2_0" / "2_0" / "v2.0" / "2.0" / "v1.0" → "v2.0"
     ver = ""
     if ver_raw:
-        cleaned = ver_raw.lstrip("vV")
-        ver = f"v{cleaned.replace('_', '.')}" if cleaned else ""
+        cleaned = ver_raw.lstrip("vV").replace("_", ".")
+        if cleaned:
+            ver = f"v{cleaned}"
 
     return separator.join(p for p in (bb, fa, ver) if p)
 
